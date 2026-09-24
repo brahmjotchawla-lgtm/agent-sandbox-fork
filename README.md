@@ -27,3 +27,7 @@ committed under [`results/`](results/).
 | `results/` | Committed raw benchmark and test output |
 | `tests/` | Unit, failure-path, and adversarial security tests |
 | `scripts/` | Host setup and verification scripts |
+
+## License
+
+Apache-2.0. See [LICENSE](LICENSE).
