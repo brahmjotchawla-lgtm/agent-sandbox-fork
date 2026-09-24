@@ -1,0 +1,2 @@
+# Target host is Linux; keep LF so scripts and docs behave identically there.
+* text=auto eol=lf
