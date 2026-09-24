@@ -537,7 +537,7 @@ def check_tools(ctx):
 def check_btrfs_loopback(ctx):
     for t in ("mkfs.btrfs", "btrfs", "mount"):
         if not shutil.which(t):
-            return "skip", f"{t} not installed (btrfs-progs); only matters if overlayfs fork fallback is needed", {}
+            return "skip", f"{t} not installed (install btrfs-progs); required because DESIGN §3 forks via btrfs snapshots", {}
     s = Scratch(ctx["workdir"], "btrfs-")
     try:
         img = os.path.join(s.dir, "img")
@@ -585,7 +585,7 @@ CHECKS = [
     ("veth_netns", True, "§5.4", check_veth_netns),
     ("nft", True, "§5.4", check_nft),
     ("tools", False, "§4, BENCHMARKS §2", check_tools),
-    ("btrfs_loopback", False, "§3 fallback", check_btrfs_loopback),
+    ("btrfs_loopback", True, "§3", check_btrfs_loopback),
 ]
 
 
