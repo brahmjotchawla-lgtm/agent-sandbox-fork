@@ -18,8 +18,8 @@ schedule regardless of which phase is in progress.
 
 ## Phase 0 — Host verification and scaffold (~2-3 days)
 
-Demonstrable: a shell script that proves the target VM actually has what
-the design assumes — overlayfs mount works, `unshare` can create
+Demonstrable: a script (`scripts/host_check.py`) that proves the target VM actually has what
+the design assumes — a btrfs subvolume can be snapshotted while its source keeps being written, `unshare` can create
 mount/PID/UTS/IPC/net namespaces, cgroup v2 is mounted and delegatable,
 `nft` is available — run once against the real provisioned host, output
 committed under `/results/phase0-host-check/`.
@@ -29,15 +29,14 @@ Also: repo scaffold, this doc set (done), CI skeleton.
 ## Phase 1 — Single-sandbox lifecycle (~1 week)
 
 Demonstrable: control plane can create one sandbox from a base image
-(namespaces + overlayfs + cgroup, no network yet), `exec` a command
+(btrfs subvolume snapshot + namespaces + cgroup, no network yet), `exec` a command
 inside it, and `destroy` it with verified cleanup — including a test that
 crashes a sandbox mid-operation and confirms the control plane still
 cleans up mounts/namespaces/cgroups afterward (per CLAUDE.md rule 4).
 
 ## Phase 2 — Fork + first benchmark (~1 week)
 
-Demonstrable: `fork(sandbox_id)` produces an independent sibling via
-overlayfs layering + fresh namespaces/cgroup (network isolation still
+Demonstrable: `fork(sandbox_id)` produces an independent sibling via cgroup freeze + btrfs snapshot + fresh namespaces/cgroup (network isolation still
 pending — Phase 3). First real benchmark run: fork latency vs. Docker
 container restart on the same workspace, raw output committed under
 `/results`, exact command in BENCHMARKS.md.
@@ -55,7 +54,7 @@ adversarial suite is Phase 4).
 
 Demonstrable: the actual escape-attempt tests as code — privilege
 escalation attempts, netns escape attempts, cgroup bypass attempts,
-overlayfs symlink/mount escape attempts, attempts to reach the control
+btrfs ioctl and subvolume-path escape attempts, symlink/mount escape attempts, attempts to reach the control
 plane or the proxy's non-existent admin surface. Results table
 (pass/fail/known-limitation) committed, matching DESIGN.md §5.3's stated
 non-coverage — no silent gaps.

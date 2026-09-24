@@ -48,7 +48,7 @@ The inference-server call is also the concrete thing the egress proxy
      (client)        │   JSON-RPC API)          │   see §5.5
                      └─────────┬────────────────┘
                                │ sets up per-sandbox:
-                               │ namespaces, overlayfs, cgroup, veth
+                               │ namespaces, btrfs snap, cgroup, veth
               ┌────────────────┼────────────────┐
               ▼                ▼                ▼
       ┌───────────────┐ ┌───────────────┐ ┌───────────────┐
@@ -57,8 +57,8 @@ The inference-server call is also the concrete thing the egress proxy
       │  base image)   │ │  Sandbox A)    │ │  base image)   │  mutable
       │ own netns,     │ │ own netns,     │ │ own netns,     │  state
       │ mountns, pidns,│ │ mountns, ...   │ │ mountns, ...   │  between
-      │ cgroup, upper  │ │ cgroup, upper  │ │ cgroup, upper  │  any of
-      │ overlay layer  │ │ overlay layer  │ │ overlay layer  │  these
+      │ cgroup, own    │ │ cgroup, own    │ │ cgroup, own    │  any of
+      │ subvolume      │ │ subvolume      │ │ subvolume      │  these
       └───────┬────────┘ └───────┬────────┘ └───────┬────────┘
               │ veth             │ veth             │ veth
               ▼                  ▼                  ▼
@@ -72,47 +72,92 @@ The inference-server call is also the concrete thing the egress proxy
                     (only allowlisted destinations)
 ```
 
-Each sandbox is: an overlayfs mount (lowerdir = shared read-only base or a
-parent sandbox's flattened state, upperdir = this sandbox's own writes,
-empty at fork time) + a fresh set of Linux namespaces (mount, PID, UTS,
+Each sandbox is: its own btrfs subvolume (a snapshot of the base image or of a parent sandbox) + a fresh set of Linux namespaces (mount, PID, UTS,
 IPC, network, and a user namespace — §5.2) + a cgroup v2 leaf for resource
 limits + a veth pair into the egress-proxy netns.
 
-## 3. Copy-on-write mechanism: overlayfs
+## 3. Copy-on-write mechanism: btrfs subvolume snapshots
 
-**Decision: overlayfs**, rejecting btrfs and ZFS.
+**Decision: btrfs.** This supersedes an earlier overlayfs choice (see
+"Why not overlayfs" below); the reversal is deliberate and the evidence
+is cited, not hidden.
+
+**Mechanics:**
+- Backing store: a btrfs filesystem at a control-plane-owned path. A
+  dedicated block device is preferred; a loopback file on the VM is the
+  fallback, and BENCHMARKS.md §3 explains why that distinction must be
+  recorded with every result.
+- Base image = a btrfs subvolume.
+- `create_environment(base)` = writable snapshot of the base subvolume.
+  No file data is copied; extents are shared until written.
+- `fork(sandbox)` = freeze the parent's cgroup, snapshot the parent's
+  subvolume, thaw. The parent keeps writing to its own subvolume; the
+  child gets its own. Neither is a layer under the other, so there is no
+  shared mutable layer — this is the property overlayfs could not give us.
+  The freeze window is part of fork's cost and is reported separately.
+  Whether the snapshot contains every write the parent completed before
+  the freeze (including data still in the page cache) is required
+  behavior that Phase 2's "fork during active I/O" test must verify; it
+  is not assumed here.
+- Each sandbox's rootfs is its own subvolume, mounted into its own mount
+  namespace. A sandbox never gets a path to the btrfs top level or to
+  another sandbox's subvolume.
+- `destroy` = subvolume delete. Space reclamation is asynchronous in the
+  kernel, so cleanup tests must poll rather than assume immediacy.
 
 | | overlayfs | btrfs | ZFS |
 |---|---|---|---|
-| Setup cost | None — works on top of any existing filesystem (ext4/xfs) already backing the VM | Requires a dedicated btrfs-formatted volume/subvolume | Requires the out-of-tree `zfsutils-linux` kernel module + zpool setup |
-| Fork cost | `mkdir` for a new upper/work dir + one `mount(2)` syscall — no data copy | Subvolume clone (`btrfs subvolume snapshot`) — no data copy | Dataset clone from snapshot (`zfs clone`) — no data copy |
-| Known limitation | Lowerdir stack depth capped (~500 on modern kernels); deep fork chains need periodic flattening (merge upper into a fresh combined lower) | None significant for this use case | None significant for this use case |
-| Production precedent | Docker's default storage driver on modern kernels | systemd-nspawn, older Docker storage driver | Used by some PaaS-style sandbox providers for exactly this clone-based pattern |
+| Fork a *live* parent safely | No — see below | Snapshot of the source subvolume; parent unaffected afterwards | Same, via `zfs snapshot`/`clone` |
+| Stacking depth limit | Yes, and it depends on path length (measured below) | No layer stack; each snapshot is an independent subvolume (deep-chain behavior still to be tested in Phase 2) | None |
+| Setup cost | None | Needs a btrfs volume (dedicated device or loopback) and `btrfs-progs` | Out-of-tree kernel module + zpool |
 
-overlayfs wins on time budget: it needs zero disk provisioning (the VM's
-existing root filesystem is enough), has the most-documented failure
-modes of the three, and is what the most widely deployed container
-runtime already uses in production, which makes any benchmark story about
-it easy for a reviewer to sanity-check independently. btrfs and ZFS both
-have cleaner clone semantics (no stacking-depth ceiling) but that
-advantage isn't worth the setup cost and the new operational surface
-(kernel module version drift, dedicated volume management) inside a
-6-week part-time budget. The stacking-depth limitation is treated as a
-documented known limitation, not hidden: past a configurable chain depth,
-the control plane flattens a sandbox's overlay stack into a new base
-layer before continuing to fork from it.
+**Why not overlayfs.** Two findings, both from Phase 0:
 
-**Fork mechanics:**
-- Base image = a directory tree, mounted read-only as `lowerdir`.
-- `create_sandbox(base)` → new empty `upperdir`/`workdir`, overlay-mounted
-  against `lowerdir`. Cost: directory creation + one mount call.
-- `fork(sandbox_id)` → the forking sandbox's current `lowerdir + upperdir`
-  become the new sandbox's `lowerdir` (multiple lowerdirs are stacked, not
-  merged), with a fresh empty `upperdir`. No bytes are copied at fork
-  time; both parent and child continue writing into their own, separate,
-  now-diverging upper layers. Divergence cost is paid later, per write,
-  as normal overlayfs copy-up behavior — see BENCHMARKS.md for why this
-  deferred cost has to be measured too, not just the fork call itself.
+1. *Forking a live parent is unsafe.* The natural overlayfs fork stacks
+   the parent's `upperdir` under the child as a lower layer while the
+   parent keeps writing to it. The kernel's overlayfs documentation says
+   behavior is undefined if an underlying layer is modified while the
+   overlay is mounted. Observed on the WSL2 dev host (**not** the target
+   VM): the parent's post-fork writes were visible in the child
+   ([raw output](results/phase0-host-check/wsl-dev-NOT-TARGET/20260924T063306Z-Brahmjotslaptop.json),
+   check `overlay_parent_write_after_fork`, produced by
+   [scripts/host_check.py](scripts/host_check.py)). That observation is
+   not a guarantee either way, which is the point: the design cannot rest
+   on it. Avoiding the problem means moving the parent onto a new upper
+   layer, which cannot be done underneath running processes.
+2. *The stacking limit is not a fixed 500.* On the same WSL2 host,
+   legacy `mount(2)` accepted 500 stacked lowerdirs with short relative
+   paths but only 121 with absolute paths, because all layer paths must
+   fit in one mount-option string (same JSON, check `overlay_max_layers`).
+   To be re-measured on the target VM.
+
+**Why not ZFS:** unchanged from the earlier analysis — it needs an
+out-of-tree kernel module and a zpool, which is setup and operational
+surface this budget can't absorb for no semantic gain over btrfs here.
+
+**Costs and risks of btrfs, stated plainly:**
+- *Substrate must be recorded and, where possible, matched.* Forking on a
+  btrfs loopback file while the Docker baseline runs on the VM's root
+  filesystem would compare two different storage stacks. See
+  BENCHMARKS.md §3.
+- *Snapshot latency under write load is unmeasured.* Creating a snapshot
+  is not free of coordination with in-flight writes; fork is therefore
+  benchmarked while the parent is actively writing, not only when idle.
+- *Larger kernel attack surface.* btrfs adds filesystem-specific ioctls
+  that a root process in a sandbox could try to call. Mitigations planned
+  for Phase 3: no path to the top-level volume, and a seccomp filter
+  denying btrfs ioctls. These are mitigations, not proofs, and are
+  covered by Phase 4 adversarial tests and listed in §5.3.
+- *Snapshots are crash-consistent, not application-consistent.* Freezing
+  the cgroup narrows the window but does not make a database-in-progress
+  consistent.
+- *UID mapping.* Files in the base subvolume must be owned by the mapped
+  host range, or the rootfs mounted with an idmapped mount (kernel
+  support for btrfs to be verified). Chowning the base once at image
+  build time is the fallback.
+- *Disk space is not bounded by cgroup io limits.* Per-sandbox disk
+  quotas would need btrfs qgroups, whose overhead is unmeasured; until
+  then disk exhaustion is a documented gap (§5.3).
 
 ## 4. Process model
 
@@ -162,18 +207,13 @@ that attacking its own sandbox is a viable strategy. The design assumes:
   unprivileged UID on the host. This means that even in the event of a
   successful namespace escape, the escaping process lands on the host as
   an unprivileged user, not as root — an extra layer behind the namespace
-  boundary itself, not a replacement for it. Known complexity: unprivileged
-  overlayfs mounts inside a user namespace need kernel ≥ 5.11 or the mount
-  must be performed by the (already-root) control plane on the sandbox's
-  behalf before namespace setup completes; this is a concrete
-  implementation risk called out for Phase 1/3 (see PLAN.md).
+  boundary itself, not a replacement for it. Known complexity: the rootfs subvolume's file ownership must fall in the mapped host range (or be idmapped), and the sandbox process must switch to the mapped uid/gid after the map is written — Phase 0 showed a freshly created user namespace's creator otherwise reads as the overflow uid 65534. This is a concrete Phase 1 risk (see PLAN.md).
 - **cgroup v2** — CPU, memory, PID count, and disk I/O limits per sandbox,
   so a single sandbox (or a runaway fork fan-out) cannot starve the host
   or sibling sandboxes of resources. This is the mechanism that answers
   "can a sandbox at least be limited even where isolation is
   incomplete" (see §5.3).
-- **No shared mutable state between siblings.** Each sandbox gets its own
-  overlayfs upper layer and its own netns; there is no shared writable
+- **No shared mutable state between siblings.** Each sandbox gets its own btrfs subvolume and its own netns; there is no shared writable
   volume, shared socket, or shared service reachable by more than one
   sandbox other than the egress proxy itself (§5.4), which does not
   expose a writable or stateful surface to the sandboxes that call it.
@@ -207,6 +247,8 @@ that attacking its own sandbox is a viable strategy. The design assumes:
   helps to the extent it's configured to exclude such services, and
   allowlist misconfiguration is itself a residual risk, not something the
   architecture eliminates by construction.
+- **btrfs-specific attack surface.** Filesystem ioctls (e.g. subvolume and inode-lookup operations) are reachable from a root process in the sandbox unless filtered. Planned mitigations (no path to the top-level volume, seccomp denial of btrfs ioctls) are unproven until Phase 4 tests them; anything they miss is a known limitation.
+- **Disk exhaustion.** cgroup limits do not bound disk space; without btrfs qgroups a sandbox can fill the shared volume.
 - **Multi-host.** Single host only; no claims about isolation across a
   cluster of hosts.
 - **Resource-limit completeness.** cgroup v2 limits (§5.2) cover CPU,
@@ -236,8 +278,7 @@ veth interfaces.
 
 ### 5.5 Control plane as trusted computing base
 
-The control plane runs as host root to set up namespaces, overlayfs
-mounts, and cgroups on the sandboxes' behalf (regular unprivileged
+The control plane runs as host root to set up namespaces, btrfs subvolumes, and cgroups on the sandboxes' behalf (regular unprivileged
 processes can't do all of this). That makes it part of the TCB: a bug in
 it is not "a sandbox escaped," it's "the host is compromised directly."
 Mitigations are process hygiene, not architectural elimination of the
@@ -254,9 +295,9 @@ needs. A thin Python client library wraps the socket for callers.
 
 ```
 create_environment(base_image: str) -> sandbox_id
-fork(sandbox_id: str) -> sandbox_id            # environment fork, see §4
+fork(sandbox_id: str) -> sandbox_id            # environment fork, see §3-4
 exec(sandbox_id: str, cmd: list[str]) -> {stdout, stderr, exit_code}
-snapshot_info(sandbox_id: str) -> {overlay_chain_depth, created_at, ...}
+snapshot_info(sandbox_id: str) -> {subvolume_id, parent_id, created_at, ...}
 destroy(sandbox_id: str) -> None
 list_sandboxes() -> list[sandbox_id]
 ```

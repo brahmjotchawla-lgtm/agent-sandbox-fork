@@ -52,17 +52,14 @@ See [DESIGN.md](DESIGN.md) for architecture and threat model,
 
 ## Architecture at a glance (see DESIGN.md for the real version)
 
-- Host: Linux VM with root, overlayfs, network/mount/PID namespaces,
-  cgroup v2.
-- Copy-on-write: overlayfs (justified over btrfs/ZFS in DESIGN.md).
+- Host: Linux VM with root, a btrfs volume, network/mount/PID namespaces, cgroup v2.
+- Copy-on-write: btrfs subvolume snapshots. overlayfs was rejected after Phase 0 findings (see DESIGN.md §3).
 - Control plane: Python, with small C/Rust used only where a syscall
   genuinely isn't reachable cleanly from Python.
-- Fork MVP = clone the environment (new overlayfs upper + new namespaces +
-  new cgroup) and start a fresh process tree inside it. This is distinct
+- Fork MVP = clone the environment (btrfs snapshot of the parent subvolume + new namespaces + new cgroup) and start a fresh process tree inside it. This is distinct
   from CRIU-based live process memory fork, which is a stretch goal — keep
   this distinction explicit everywhere in docs and code comments.
-- Containment primitives (namespaces, cgroups, overlayfs, egress
-  filtering) are built directly from Linux primitives (`unshare`, `mount`,
+- Containment primitives (namespaces, cgroups, btrfs snapshots, egress filtering) are built directly from Linux primitives (`unshare`, `mount`,
   cgroup v2 fs, `nft`) rather than wrapped from an existing sandbox
   toolkit (bubblewrap, runc) — that's where this project's technical
   depth comes from.

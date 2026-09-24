@@ -15,7 +15,7 @@ be updated with links to actual results as each phase in
 Primary metric: wall-clock latency from API call to "sandbox ready to
 `exec`," for two operations on the same starting workload:
 
-- `fork(sandbox_id)` — this repo's overlayfs-based environment fork
+- `fork(sandbox_id)` — this repo's btrfs-snapshot-based environment fork
   (DESIGN.md §3-4).
 - Container restart baseline — `docker run` against a **warm-cached**
   image containing the same workload (see §2).
@@ -23,24 +23,21 @@ Primary metric: wall-clock latency from API call to "sandbox ready to
 Reported per component, not just as one number, because the interesting
 engineering claim is *why* fork is cheap:
 
+- parent cgroup freeze-to-thaw window
+- btrfs snapshot time
 - namespace creation time
-- overlayfs mount time
+- rootfs mount/pivot time
 - cgroup setup time
 - veth/netns setup time
 - total, end-to-end
 
 Secondary metric (see §3.4 — this is the one most benchmarks in this
-space skip): **post-fork copy-up cost.** overlayfs fork is metadata-only
-at fork time; the cost of divergence is paid later, per byte, when a
-forked sandbox actually writes to a file that exists only in a lower
-layer. A benchmark that reports only the fork call's latency and ignores
+space skip): **post-fork copy-on-write cost.** A snapshot shares extents at fork time; the cost of divergence is paid later, when a forked sandbox writes to a shared extent. A benchmark that reports only the fork call's latency and ignores
 this is misleading by omission — see §3.4 for how this is measured
 honestly.
 
 Fan-out metric: latency of `fork` to N children (N = 1, 10, 50, 100,
-hardware-permitting) vs. starting N containers, to demonstrate the actual
-shape of the claim (shared lower layer keeps fork flat; restart cost
-scales ~linearly with N).
+hardware-permitting) vs. starting N containers, to test the actual shape of the claim: whether fork cost stays flat in N while restart cost grows with N. Either outcome is reported.
 
 **Claim 2: containment holds against root-inside adversary.**
 
@@ -78,7 +75,7 @@ could be mistaken for a performance metric.
    benchmark run reports the full distribution (min/median/p95/p99) over
    N ≥ 30 trials, with raw per-trial timestamps committed under
    `/results`, not just a summary.
-4. **Ignoring deferred copy-up cost.** A fork-only number taken in
+4. **Ignoring deferred copy-on-write cost.** A fork-only number taken in
    isolation overstates the win, because it hides the cost that gets paid
    later. The harness also runs a "fork + realistic post-fork writes"
    scenario (e.g., the agent modifies N files after forking) and reports
@@ -91,11 +88,13 @@ could be mistaken for a performance metric.
    A design whose only advantage shows up at 1:1 and disappears or
    inverts at realistic fan-out would be a materially different (weaker)
    claim than what this project sets out to prove, so both are reported.
-6. **Unstated or unreproducible hardware.** Every result in `/results`
+6. **Mismatched storage substrates.** Forking on btrfs (especially a loopback file on the VM's root disk) against a Docker baseline on a different filesystem would compare two storage stacks, not fork versus restart. Every result records the filesystem and backing device for both sides; the baseline's Docker data-root is placed on the same physical device as the btrfs volume, and loopback-versus-block-device results are never mixed in one comparison.
+7. **Fork measured only on an idle parent.** Snapshot cost may depend on in-flight writes, so fork is also measured while the parent is actively writing, and that number is reported next to the idle one.
+8. **Unstated or unreproducible hardware.** Every result in `/results`
    includes the exact host spec (CPU, RAM, disk type, kernel version) it
    was produced on, in the same file as the raw output. Numbers are not
    claimed to generalize beyond that documented hardware.
-7. **Cherry-picked runs.** The harness script and its exact invocation
+9. **Cherry-picked runs.** The harness script and its exact invocation
    are linked from every number that appears in README/DESIGN, per
    CLAUDE.md rule 2 — anyone can re-run it.
 
