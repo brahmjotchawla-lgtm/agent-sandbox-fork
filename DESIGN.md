@@ -321,6 +321,51 @@ risk: keep its code surface small, never deserialize untrusted input
 originating from inside a sandbox without validation, and don't expose
 more API surface to sandboxes than `exec`/basic I/O requires.
 
+### 5.6 Adversarial coverage (Phase 4)
+
+The adversary in every test is root inside the sandbox. The "Result"
+column comes from the
+[cloud-container run](results/phase4-adversarial/claude-cloud-container-NOT-TARGET/)
+(NOT the target host: no btrfs, no cgroup v2). *Pass* means the attack
+failed. *Known limitation* means the test pins the current, weaker
+behaviour, so a fix or a regression shows up. *Not tested* means the
+defence exists, or the gap is documented, but nothing here verifies it.
+
+| Attack | Test | Result (non-target) |
+|---|---|---|
+| See or signal host processes | `test_adversarial::test_cannot_see_host_processes`, `test_kill_all_only_hits_sandbox` | pass |
+| Climb out of the root (double chroot, `/proc/1/root`) | `test_chroot_breakout_stays_inside`, `test_proc_1_root_is_sandbox_root` | pass |
+| Create or mount host block devices | `test_cannot_mknod_or_mount_host_devices` | pass |
+| Load kernel modules | `test_cannot_load_kernel_modules` | pass (kernel has no module support: ENOSYS) |
+| `reboot(2)` | `test_reboot_only_kills_own_sandbox` | pass (kills only its own sandbox) |
+| Write host sysctls, sysrq | `test_host_sysctls_and_sysrq_not_writable` | pass |
+| Map host uid 0 via a nested userns | `test_nested_userns_cannot_map_host_root` | pass |
+| Reach the control socket | `test_control_socket_not_visible` | pass |
+| Siblings share a host uid | `test_lifecycle::test_sandbox_root_is_unprivileged_on_host` | pass |
+| btrfs ioctls (subvolume create/snapshot/lookup) | `test_seccomp::test_btrfs_ioctls_blocked` | pass at the filter level (EPERM); **not tested against a real btrfs mount** |
+| Syscalls through non-x86_64 ABIs (32-bit, x32) | none | **not tested**: the filter kills them (§8.2), but no test here exercises that rule |
+| No new privileges via setuid binaries | `test_no_new_privs_and_seccomp_on_every_process` | pass |
+| Egress to the internet directly, or after re-routing and flushing own nft | `test_network::test_no_route_to_internet`, `test_root_cannot_route_around_egress_netns` | pass |
+| Reach host services on any host address | `test_host_services_unreachable` | pass |
+| Join or modify the egress netns | `test_root_cannot_modify_egress_rules` | pass |
+| Reach or spoof a sibling on the network | `test_siblings_cannot_reach_each_other`, `test_source_spoofing_dropped` | pass |
+| SSRF through the proxy (non-allowlisted, name resolving to private, proxy loop) | `test_non_allowlisted_denied`, `test_hostname_resolving_to_private_address_refused`, `test_adversarial_phase4::test_proxy_refuses_to_connect_to_itself` | pass |
+| Proxy admin or other surface (GET, DELETE, OPTIONS, HTTP/2 preface) | `test_plain_http_forwarding_refused`, `test_proxy_has_no_admin_surface` | pass |
+| Crash the proxy with malformed or oversized requests | `test_proxy_survives_malformed_and_oversized_requests` | pass |
+| Starve siblings of the proxy (slowloris) | `test_one_sandbox_cannot_starve_siblings_of_the_proxy` | pass (per-peer cap; mutation-checked) |
+| Abstract unix socket to host services | `test_host_abstract_unix_socket_unreachable` | pass |
+| SysV IPC with a sibling | `test_sibling_ipc_isolated` | pass |
+| Symlinks aimed at host paths, followed by host-root copy/delete | `test_symlinks_to_host_survive_fork_and_destroy` | pass (copy backend; the btrfs delete walk is **not tested**) |
+| Hostile filenames or permissions breaking destroy | `test_hostile_filenames_do_not_break_destroy` | pass |
+| Mounts leaking to forks or the host | `test_sandbox_mounts_do_not_reach_forks_or_host` | pass |
+| Host fds or env leaking into exec | `test_exec_leaks_no_host_fds_or_env` | pass (mutation-checked) |
+| Outlive an exec timeout via `setsid()` | `test_KNOWN_LIMITATION_setsid_escapes_exec_timeout` | **known limitation** (stays inside the sandbox; removed on destroy) |
+| Memory, pids and fork-bomb exhaustion | `test_lifecycle::test_memory_limit_enforced`, `test_pids_limit_contains_fork_bomb` | **skipped**: no cgroup v2 on this host |
+| Writing own cgroup limits (mount cgroup2 inside) | none | **not tested**: needs cgroup v2 |
+| Disk exhaustion | none | **known limitation** (§5.3), deliberately not run: it would fill the host disk |
+| Proxy compromise, then host-network access as `nobody` | none | **known limitation** (§5.3) |
+| Kernel 0-days, side channels | none | out of scope (§5.3) |
+
 ## 6. API surface
 
 Local Unix-domain-socket JSON-RPC, not an HTTP port — deliberately, to

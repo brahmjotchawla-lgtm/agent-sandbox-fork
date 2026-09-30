@@ -8,7 +8,7 @@
 | 1 | Implemented and tested on the non-target host (dev_mode: copy backend, cgroups unenforced). |
 | 2 | Fork and harness implemented. Fork semantics are tested. The btrfs path, the freeze, and all benchmark numbers are **pending the target VM**. |
 | 3 | Egress netns, proxy, nft, per-sandbox uid ranges and seccomp are implemented and tested. The cgroup limit tests are written but skipped (no cgroup v2 on the test host). |
-| 4 | First adversarial slice is in `tests/test_adversarial.py` and `tests/test_network.py`. The full suite and its coverage table aren't done. |
+| 4 | Suite and coverage table (DESIGN.md §5.6) done for everything testable without btrfs/cgroup v2. Open: the ABI-kill seccomp rule, cgroup self-modification, and the btrfs-specific rows, which need the target VM. |
 | 5 | Not started (CRIU stretch). |
 | 6 | Not started. |
 

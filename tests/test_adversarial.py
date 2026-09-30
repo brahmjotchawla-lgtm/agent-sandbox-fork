@@ -1,6 +1,5 @@
-"""First slice of the Phase 4 adversarial suite: root inside the sandbox
-tries to reach the host. Each test is one concrete attack. The full Phase 4
-suite (DESIGN.md §5.3 coverage table) is not complete; see PLAN.md.
+"""Phase 4 adversarial suite, part 1: root inside the sandbox tries to reach
+the host. Each test is one concrete attack. Coverage table: DESIGN.md §5.6.
 """
 from __future__ import annotations
 
