@@ -1,0 +1,261 @@
+{
+  "schema_version": 1,
+  "started_utc": "2026-09-30T17:07:29.649927+00:00",
+  "finished_utc": "2026-09-30T17:07:31.554229+00:00",
+  "hostname": "vm",
+  "command": "/usr/local/bin/python3 scripts/host_check.py --out-dir results/phase0-host-check/claude-cloud-container-NOT-TARGET",
+  "script_sha256": "9c3832d5d46418184d9092e9460e5f958b524591c7443ca537e2a1c725f2f410",
+  "git": {
+    "commit": "66418e4367e45493a9e94adeb385217c5e7345e7",
+    "dirty": false
+  },
+  "is_wsl": false,
+  "required_failed": [
+    "cgroup_v2",
+    "veth_netns",
+    "nft",
+    "btrfs_loopback"
+  ],
+  "checks": [
+    {
+      "name": "host_info",
+      "required": false,
+      "design_ref": "BENCHMARKS \u00a73.6",
+      "status": "info",
+      "detail": "Ubuntu 24.04.4 LTS, kernel 6.18.44-fc-v50, virt=docker, wsl=False",
+      "data": {
+        "kernel": "6.18.44-fc-v50",
+        "uname": "Linux vm 6.18.44-fc-v50 #1 SMP PREEMPT_DYNAMIC @0 x86_64 x86_64",
+        "distro": "Ubuntu 24.04.4 LTS",
+        "cpu_model": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+        "cpu_count": 4,
+        "mem_total_kb": 16480972,
+        "virt": "docker",
+        "dmi_vendor": "n/a",
+        "dmi_product": "n/a",
+        "is_wsl": false,
+        "lsblk": "NAME  ROTA TYPE   SIZE MODEL\nzram0    0 disk     0B \nvda      1 disk   256G \nvdb      1 disk   9.6M \nvdc      1 disk 256.7M \nvdd      1 disk  47.2M \nvde      1 disk   676K \nvdf      1 disk   5.7M",
+        "workdir": "/var/tmp",
+        "workdir_fs": "ext4   /dev/vda",
+        "python": "3.11.15"
+      }
+    },
+    {
+      "name": "overlay_registered",
+      "required": true,
+      "design_ref": "\u00a73",
+      "status": "pass",
+      "detail": "overlay listed in /proc/filesystems",
+      "data": {}
+    },
+    {
+      "name": "overlay_basic",
+      "required": true,
+      "design_ref": "\u00a73",
+      "status": "pass",
+      "detail": "mount, read-through, copy-up, and lower-immutability all held",
+      "data": {}
+    },
+    {
+      "name": "overlay_fork_stack",
+      "required": true,
+      "design_ref": "\u00a73 fork mechanics",
+      "status": "pass",
+      "detail": "child sees pre-fork state; child writes stay in child upper, invisible to parent",
+      "data": {}
+    },
+    {
+      "name": "overlay_parent_write_after_fork",
+      "required": false,
+      "design_ref": "\u00a73 fork mechanics",
+      "status": "info",
+      "detail": "parent writes AFTER fork were visible in child (isolation broken); kernel docs call this undefined behavior, so this observation is not a guarantee",
+      "data": {
+        "child_reads_parent_txt_as": "parent-AFTER-fork",
+        "child_sees_late_txt": true,
+        "child_listing": [
+          "base.txt",
+          "late.txt",
+          "parent.txt"
+        ]
+      }
+    },
+    {
+      "name": "overlay_max_layers",
+      "required": false,
+      "design_ref": "\u00a73 stacking limit",
+      "status": "info",
+      "detail": "max stacked lowerdirs via legacy mount(2): 500 with short relative paths, 121 with absolute paths under /var/tmp",
+      "data": {
+        "relative_paths": {
+          "max_layers": 500,
+          "mount_data_len_at_max": 2419,
+          "next_layer_failure": "EINVAL: Invalid argument",
+          "mount_data_len_at_failure": 2424,
+          "ok_at_500": true,
+          "ok_at_501": false,
+          "layer_path_len_example": 4,
+          "search_ceiling": 1100
+        },
+        "absolute_paths": {
+          "max_layers": 121,
+          "mount_data_len_at_max": 4091,
+          "next_layer_failure": "EINVAL: Invalid argument",
+          "mount_data_len_at_failure": 4125,
+          "ok_at_500": false,
+          "ok_at_501": false,
+          "layer_path_len_example": 33,
+          "search_ceiling": 1100
+        }
+      }
+    },
+    {
+      "name": "namespaces",
+      "required": true,
+      "design_ref": "\u00a75.2",
+      "status": "pass",
+      "detail": "mnt/uts/ipc/net/pid namespaces all distinct from host; child is PID 1",
+      "data": {}
+    },
+    {
+      "name": "userns_mapping",
+      "required": true,
+      "design_ref": "\u00a75.2",
+      "status": "pass",
+      "detail": "ns-root (uid 0) mapped to host uid 100000; host-root-owned files show as uid 65534 inside",
+      "data": {
+        "max_user_namespaces": "64303",
+        "apparmor_restrict_unprivileged_userns": "n/a",
+        "probe": {
+          "uid": 0,
+          "host_root_file_appears_as_uid": 65534
+        }
+      }
+    },
+    {
+      "name": "overlay_in_userns",
+      "required": false,
+      "design_ref": "\u00a75.2",
+      "status": "info",
+      "detail": "overlay mounted by userns-root succeeded (plain options)",
+      "data": {
+        "probe": {
+          "uid": 0,
+          "host_root_file_appears_as_uid": 65534,
+          "overlay": {
+            "plain": "ok (read lower='lower', create ok)"
+          }
+        }
+      }
+    },
+    {
+      "name": "cgroup_v2",
+      "required": true,
+      "design_ref": "\u00a75.2",
+      "status": "fail",
+      "detail": "no cgroup v2 unified hierarchy at /sys/fs/cgroup",
+      "data": {}
+    },
+    {
+      "name": "veth_netns",
+      "required": true,
+      "design_ref": "\u00a75.4",
+      "status": "fail",
+      "detail": "RuntimeError: ip netns add sbxchk608 -> rc=127: ip: not found",
+      "data": {
+        "traceback": "Traceback (most recent call last):\n  File \"/home/user/agent-sandbox-fork/scripts/host_check.py\", line 619, in main\n    status, detail, data = fn(ctx)\n                           ^^^^^^^\n  File \"/home/user/agent-sandbox-fork/scripts/host_check.py\", line 479, in check_veth_netns\n    _ip(\"netns\", \"add\", ns)\n  File \"/home/user/agent-sandbox-fork/scripts/host_check.py\", line 471, in _ip\n    raise RuntimeError(f\"ip {' '.join(args)} -> rc={rc}: {err}\")\nRuntimeError: ip netns add sbxchk608 -> rc=127: ip: not found\n"
+      }
+    },
+    {
+      "name": "nft",
+      "required": true,
+      "design_ref": "\u00a75.4",
+      "status": "fail",
+      "detail": "RuntimeError: ip netns add sbxnft608 -> rc=127: ip: not found",
+      "data": {
+        "traceback": "Traceback (most recent call last):\n  File \"/home/user/agent-sandbox-fork/scripts/host_check.py\", line 619, in main\n    status, detail, data = fn(ctx)\n                           ^^^^^^^\n  File \"/home/user/agent-sandbox-fork/scripts/host_check.py\", line 507, in check_nft\n    _ip(\"netns\", \"add\", ns)\n  File \"/home/user/agent-sandbox-fork/scripts/host_check.py\", line 471, in _ip\n    raise RuntimeError(f\"ip {' '.join(args)} -> rc={rc}: {err}\")\nRuntimeError: ip netns add sbxnft608 -> rc=127: ip: not found\n"
+      }
+    },
+    {
+      "name": "tools",
+      "required": false,
+      "design_ref": "\u00a74, BENCHMARKS \u00a72",
+      "status": "info",
+      "detail": "present: cargo, docker, gcc, iptables, losetup, nft, nsenter, python3, rustc, unshare",
+      "data": {
+        "python3": {
+          "path": "/usr/local/bin/python3"
+        },
+        "gcc": {
+          "path": "/usr/bin/gcc",
+          "version": [
+            "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0"
+          ]
+        },
+        "rustc": {
+          "path": "/root/.cargo/bin/rustc",
+          "version": [
+            "rustc 1.94.1 (e408947bf 2026-03-25)"
+          ]
+        },
+        "cargo": {
+          "path": "/root/.cargo/bin/cargo",
+          "version": [
+            "cargo 1.94.1 (29ea6fb6a 2026-03-24)"
+          ]
+        },
+        "ip": {
+          "path": null
+        },
+        "nft": {
+          "path": "/usr/sbin/nft",
+          "version": [
+            "nftables v1.0.9 (Old Doc Yak #3)"
+          ]
+        },
+        "iptables": {
+          "path": "/usr/sbin/iptables"
+        },
+        "unshare": {
+          "path": "/usr/bin/unshare"
+        },
+        "nsenter": {
+          "path": "/usr/bin/nsenter"
+        },
+        "ping": {
+          "path": null
+        },
+        "criu": {
+          "path": null
+        },
+        "docker": {
+          "path": "/usr/bin/docker",
+          "version": [
+            "Docker version 29.3.1, build c2be9cc"
+          ],
+          "info": "failed to connect to the docker API at unix:///var/run/docker.sock; check if the path is correct and if the daemon is running: dial unix /var/run/docker.sock: connect: no such file or directory"
+        },
+        "btrfs": {
+          "path": null
+        },
+        "mkfs.btrfs": {
+          "path": null
+        },
+        "zfs": {
+          "path": null
+        },
+        "losetup": {
+          "path": "/usr/sbin/losetup"
+        }
+      }
+    },
+    {
+      "name": "btrfs_loopback",
+      "required": true,
+      "design_ref": "\u00a73",
+      "status": "skip",
+      "detail": "mkfs.btrfs not installed (install btrfs-progs); required because DESIGN \u00a73 forks via btrfs snapshots",
+      "data": {}
+    }
+  ]
+}
