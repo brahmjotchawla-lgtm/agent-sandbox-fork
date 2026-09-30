@@ -1,12 +1,13 @@
 # BENCHMARKS.md
 
-Status: draft — this document defines what will be measured and how. It
-contains **no performance numbers**, because none have been measured yet
-(no code exists). Per [CLAUDE.md](CLAUDE.md) rule 1, no number appears
-anywhere in this repo's docs until it's produced by a script under
-`/bench` with raw output committed under `/results`. This document will
-be updated with links to actual results as each phase in
-[PLAN.md](PLAN.md) lands.
+Status: the harness is implemented
+([`bench/fork_vs_restart.py`](bench/fork_vs_restart.py)). This document
+still contains **no performance numbers**, because none have been measured
+on a valid substrate. Per [CLAUDE.md](CLAUDE.md) rule 1, no number appears
+anywhere in this repo's docs until it comes from that script with raw
+output committed under `/results`. The only host it has run on so far
+(the cloud dev container) fails the substrate checks in §4, so its output
+was not committed.
 
 ## 1. What's measured
 
@@ -100,14 +101,44 @@ could be mistaken for a performance metric.
 
 ## 4. Harness
 
-- Location: `/bench` (scripts), `/results/<date>-<phase>/` (committed raw
-  output — JSON lines, one record per trial, including timestamps, host
-  spec, and the exact command invoked).
-- Not yet implemented — lands with Phase 2 (basic fork-vs-restart) and is
-  extended in Phase 3 (fan-out, containment-adjacent overhead) per
-  PLAN.md. This document will gain a "Results" section with links once
-  real numbers exist; until then, no numbers are stated anywhere in this
-  repo.
+- **Workload:** [`bench/workload/`](bench/workload/). `fetch.sh` pins
+  Django 5.1.4 (a ~6.8k-file checkout) and its pure-Python dependencies.
+  One `Dockerfile` builds the image that *both* sides use: the Docker
+  baseline runs it, and `build.sh` imports the same image (`docker export`)
+  as the fork base subvolume. This enforces §3.1 by construction.
+- **Run:** `sudo python3 bench/fork_vs_restart.py --config CFG --trials 30`.
+  The script starts its own control-plane server and times `fork` through
+  the real socket API. It drives Docker through the Engine API socket, not
+  the CLI, so the baseline doesn't pay CLI process start-up. The image is
+  already local (warm, §2), and containers get the same memory and pids
+  limits as sandboxes.
+- **Metric definition:** "ready" means the first `exec` of `true` inside
+  the new environment has returned exit 0. For fork that's `fork` +
+  `exec`; for Docker it's `create` + `start` + `exec` (attached, so it
+  blocks until the process exits).
+- **Scenarios:** `fork` (idle parent), `fork_active` (the parent is
+  continuously writing, §3.7), `docker`, `fork_writes` / `docker_writes`
+  (the same plus modifying `--writes` repo files, for deferred CoW cost,
+  §3.4), and fan-out N ∈ `--fanout` (sequential). Single-environment
+  trials of all scenarios are interleaved in a seeded shuffled order.
+  Fork's per-component timings (freeze window, snapshot, cgroup, mount,
+  namespaces + pivot, network) are recorded for every trial.
+- **Substrate gate (§3.6):** the harness exits 2 unless storage is btrfs,
+  cgroups are enforced (so fork really freezes the parent), and the btrfs
+  store and Docker's data-root sit on the same block device. It also
+  records whether the store is a loopback file. `--allow-invalid-substrate`
+  exists only for testing the harness; output produced with it is tagged
+  `valid_for_claims: false` with the reasons, and must not be cited.
+  [`scripts/setup_host.sh`](scripts/setup_host.sh) lays out one disk as a
+  btrfs partition for the store plus an ext4 partition for Docker's
+  default overlay2 driver.
+- **Output:** `results/<date>-phase2-bench/<stamp>-<host>/` contains
+  `trials.jsonl` (one record per trial), `summary.json`
+  (n/min/median/p95/p99/max per metric), `host.json` (CPU, RAM, kernel,
+  backing device and filesystem of both sides, Docker version and storage
+  driver, image IDs) and `command.txt`.
+- **Not yet measured:** fan-out done concurrently rather than sequentially,
+  and `create_environment` against a cold page cache.
 
 ## 5. Explicitly not a benchmark
 

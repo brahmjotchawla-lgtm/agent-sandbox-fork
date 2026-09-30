@@ -1,5 +1,38 @@
 # PLAN.md
 
+## Status (2026-09-30)
+
+| Phase | State |
+|---|---|
+| 0 | Host check written. It has run on two non-target hosts (WSL laptop, and the Claude cloud container, which has no btrfs and no cgroup v2). **It has not run on the target VM yet.** |
+| 1 | Implemented and tested on the non-target host (dev_mode: copy backend, cgroups unenforced). |
+| 2 | Fork and harness implemented. Fork semantics are tested. The btrfs path, the freeze, and all benchmark numbers are **pending the target VM**. |
+| 3 | Egress netns, proxy, nft, per-sandbox uid ranges and seccomp are implemented and tested. The cgroup limit tests are written but skipped (no cgroup v2 on the test host). |
+| 4 | First adversarial slice is in `tests/test_adversarial.py` and `tests/test_network.py`. The full suite and its coverage table aren't done. |
+| 5 | Not started (CRIU stretch). |
+| 6 | Not started. |
+
+**Next step, which blocks every claim:** provision the target VM
+(`scripts/setup_host.sh`), run `scripts/host_check.py`, run the full test
+suite with `AGENT_SANDBOX_TEST_BTRFS` set, then run the benchmark and
+commit all raw output.
+
+### Phase 1–3 decisions most likely to be wrong, and the fallback for each
+
+1. **Idmapped mounts on btrfs for per-sandbox uid ranges.** Verified on
+   ext4 only. *Fallback:* one shared host uid range for all sandboxes
+   (chown the base image once). This weakens sibling isolation after an
+   escape, and the change must be flagged in DESIGN.md §5.2.
+2. **Creating cgroups directly under `/sys/fs/cgroup` on a systemd host.**
+   systemd may not tolerate unmanaged cgroups, or the needed controllers
+   may not be delegated. *Fallback:* run the control plane in a systemd
+   service with `Delegate=yes` and set `cgroup_root` inside its subtree.
+3. **The btrfs snapshot including page-cache data from a frozen parent.**
+   `test_fork_during_active_io` checks this and is expected to pass on
+   btrfs with the freeze. *Fallback if it fails:* `syncfs` on the parent's
+   subvolume while it is frozen, then snapshot. That costs latency, which
+   gets reported as its own component.
+
 High-level phased roadmap. Each phase ends in something demonstrable —
 not just code that compiles. Detailed task-by-task plans for each phase
 are written immediately before that phase starts (not all upfront), and

@@ -20,3 +20,6 @@ dist/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Benchmark workload sources (fetched by bench/workload/fetch.sh)
+/bench/workload/context/

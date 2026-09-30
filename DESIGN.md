@@ -1,8 +1,9 @@
 # DESIGN.md
 
-Status: draft, pending author review. No code has been written yet — this
-document is the spec that implementation (see [PLAN.md](PLAN.md)) will be
-held to.
+Status: Phases 1–3 implemented (see [PLAN.md](PLAN.md) for status and
+[README.md](README.md#what-has-been-verified-where) for what has been
+verified on which host). Implementation-specific details are in §8.
+Nothing here is a performance claim.
 
 ## 1. Problem and use case
 
@@ -151,10 +152,12 @@ surface this budget can't absorb for no semantic gain over btrfs here.
 - *Snapshots are crash-consistent, not application-consistent.* Freezing
   the cgroup narrows the window but does not make a database-in-progress
   consistent.
-- *UID mapping.* Files in the base subvolume must be owned by the mapped
-  host range, or the rootfs mounted with an idmapped mount (kernel
-  support for btrfs to be verified). Chowning the base once at image
-  build time is the fallback.
+- *UID mapping.* Resolved with idmapped mounts (§8.1): the base image
+  stays owned by uid 0..65535 on disk, and each sandbox's rootfs is an
+  idmapped bind mount of its subvolume onto that sandbox's own host uid
+  range. No chown happens at create or fork time. Idmapped mounts have been
+  verified on ext4 (dev host). On btrfs (kernel ≥ 5.15) they have not been
+  verified yet; that happens on the target host.
 - *Disk space is not bounded by cgroup io limits.* Per-sandbox disk
   quotas would need btrfs qgroups, whose overhead is unmeasured; until
   then disk exhaustion is a documented gap (§5.3).
@@ -204,10 +207,16 @@ that attacking its own sandbox is a viable strategy. The design assumes:
   isolation; a sandboxed process cannot see host processes, host
   mounts, or the host's network interfaces.
 - **User namespace (defense in depth).** Sandbox UID 0 is mapped to an
-  unprivileged UID on the host. This means that even in the event of a
-  successful namespace escape, the escaping process lands on the host as
-  an unprivileged user, not as root — an extra layer behind the namespace
-  boundary itself, not a replacement for it. Known complexity: the rootfs subvolume's file ownership must fall in the mapped host range (or be idmapped), and the sandbox process must switch to the mapped uid/gid after the map is written — Phase 0 showed a freshly created user namespace's creator otherwise reads as the overflow uid 65534. This is a concrete Phase 1 risk (see PLAN.md).
+  unprivileged host uid, and **each sandbox gets a disjoint 65536-uid host
+  range**. A process that escapes the namespace boundary therefore lands on
+  the host as an unprivileged uid that also differs from every sibling's
+  uid, so it can't signal or ptrace sibling processes. This sits behind the
+  namespace boundary as an extra layer; it doesn't replace it. The Phase 0
+  finding (the creator of a fresh user namespace reads as uid 65534 until
+  it switches) is handled in `nsinit.py`: a helper still in the host
+  namespace writes uid_map/gid_map, then the process calls setresuid(0).
+- **seccomp + no_new_privs** on every sandbox process, installed before
+  any sandbox code runs (§8.2).
 - **cgroup v2** — CPU, memory, PID count, and disk I/O limits per sandbox,
   so a single sandbox (or a runaway fork fan-out) cannot starve the host
   or sibling sandboxes of resources. This is the mechanism that answers
@@ -257,6 +266,27 @@ that attacking its own sandbox is a viable strategy. The design assumes:
   to exhaust (e.g., inode exhaustion, open file descriptor limits beyond
   PID cgroup accounting) unless specifically tested in Phase 4 and listed
   as covered there.
+- **Known gaps found during implementation** (not yet addressed):
+  - `exec(timeout=...)` kills the command's process group. A command that
+    calls `setsid()` escapes the timeout and keeps running *inside* the
+    sandbox (still in its cgroup and namespaces) until `destroy`.
+  - The proxy runs in the host netns as `nobody`. If it were compromised,
+    the attacker could reach whatever `nobody` on the host network can,
+    including host-local services, so its SSRF filtering is a mitigation
+    and doesn't prove anything. Moving upstream traffic into a dedicated
+    uplink netns with its own nft allowlist would bound this; that isn't
+    implemented.
+  - The egress rules are IPv4-only. IPv6 is disabled in the egress and
+    sandbox netns when the kernel has IPv6 at all. Sandboxed root can
+    re-enable it in its own netns, but the egress netns has no IPv6
+    addresses and its `inet` input policy is drop.
+  - `/sys` is not mounted in sandboxes, which some tools expect.
+  - Per-sandbox proxy connection cap (64) is a crude bound, not fair
+    scheduling; one sandbox can still consume proxy CPU.
+  - The seccomp filter targets btrfs ioctls and non-x86_64 ABIs only. It
+    is not a general syscall-surface reduction (no keyctl/bpf/userfaultfd
+    denial, for example); the user namespace and dropped host capabilities
+    are what bound those today.
 
 ### 5.4 Egress proxy
 
@@ -276,6 +306,11 @@ before traffic leaves the host. The sandbox has a route to the proxy and
 nothing else — no default route to the internet or to other sandboxes'
 veth interfaces.
 
+As implemented (§8.3), the proxy's *listening socket* lives in the egress
+netns. The proxy *process* makes its upstream connections from the host
+netns after dropping to `nobody`. The egress netns itself has no path to
+the host or the internet. The residual risk this leaves is listed in §5.3.
+
 ### 5.5 Control plane as trusted computing base
 
 The control plane runs as host root to set up namespaces, btrfs subvolumes, and cgroups on the sandboxes' behalf (regular unprivileged
@@ -294,13 +329,21 @@ the use case (a local RL trainer/eval harness on the same host) actually
 needs. A thin Python client library wraps the socket for callers.
 
 ```
-create_environment(base_image: str) -> sandbox_id
-fork(sandbox_id: str) -> sandbox_id            # environment fork, see §3-4
-exec(sandbox_id: str, cmd: list[str]) -> {stdout, stderr, exit_code}
-snapshot_info(sandbox_id: str) -> {subvolume_id, parent_id, created_at, ...}
+create_environment(base_image: str) -> {sandbox_id, timings_ms}
+fork(sandbox_id: str) -> {sandbox_id, parent_id, timings_ms}   # environment fork, see §3-4
+exec(sandbox_id: str, cmd: list[str], timeout?, stdin?, env?, cwd?)
+    -> {stdout, stderr, exit_code, timed_out, duration_ms}   # output capped at 8 MiB/stream
+snapshot_info(sandbox_id: str) -> {id, parent_id, image, subvolume{uuid, parent_uuid, ...}, cgroup, net, ...}
 destroy(sandbox_id: str) -> None
-list_sandboxes() -> list[sandbox_id]
+list_sandboxes() -> [{id, image, parent_id, phase}]
+import_image(name: str, docker_ref: str) -> {...}   # admin: docker export -> read-only base subvolume
+list_images() -> [...]
 ```
+
+`create_environment` and `fork` both return per-component timings
+(`snapshot_ms`, `freeze_window_ms`, `cgroup_ms`, `rootfs_mount_ms`,
+`namespaces_and_pivot_ms`, `network_ms`, `total_ms`). The benchmark reports
+them separately (BENCHMARKS.md §1).
 
 `fork` is the operation under benchmark in Claim 1; `create_environment`
 + `exec` are what the container-restart baseline is compared against.
@@ -312,3 +355,80 @@ list_sandboxes() -> list[sandbox_id]
 - Arbitrary non-Linux workloads.
 - Live process-memory fork in the MVP (CRIU is a stretch goal, §4).
 - A network-reachable control-plane API.
+
+## 8. Implementation notes
+
+### 8.1 Sandbox start sequence
+
+The code is `control_plane/sandbox.py` (`Manager._start`) plus
+`control_plane/nsinit.py`.
+
+1. A state file is written *before* any resource is acquired, and updated
+   as each one is added (crash recovery, §8.4).
+2. A btrfs snapshot is taken of the image (create) or of the frozen parent
+   (fork).
+3. A cgroup v2 leaf is created with memory, swap, pids and cpu limits.
+4. The subvolume gets an idmapped, `nosuid,nodev` bind mount at
+   `run_dir/mnt/<id>`, mapping on-disk 0..65535 to this sandbox's host
+   range.
+5. `nsinit.py holder` starts as host root. It joins the cgroup, sets
+   `no_new_privs` and seccomp, calls `unshare(CLONE_NEWUSER)`, and a helper
+   still in the host user namespace writes the id maps. It then calls
+   setresuid(0) and unshares mount, UTS, IPC, net, PID and cgroup
+   namespaces, and forks. The child is PID 1. It re-binds the rootfs
+   (the mount copied from the host namespace is locked), mounts `proc`, a
+   minimal tmpfs `/dev` (null, zero, full, random, urandom, tty, a new
+   devpts instance, shm), sets the hostname, calls
+   `pivot_root(".", ".")` and detaches the old root, so no host path
+   remains in the sandbox's mount namespace. It then reaps children.
+6. The host's copy of the rootfs mount is detached. The sandbox keeps its
+   own copy.
+7. A veth pair is created with each end directly in its target namespace
+   (`sbxh<slot>` in the egress netns, `eth0` in the sandbox). The sandbox
+   gets only a /30 connected route, with no default route.
+
+`exec` runs `nsinit.py enter`, which joins the cgroup and sets the same
+seccomp filter, then execs `nsenter` into all the sandbox's namespaces
+with the sandbox's root and working directory. Environment variables are
+set explicitly; nothing is inherited from the control plane.
+
+### 8.2 seccomp filter
+
+Classic BPF, installed with `no_new_privs`. Syscalls from any non-x86_64
+ABI (32-bit `int 0x80`, and x32) are killed outright, because a filter
+keyed on x86_64 syscall numbers wouldn't see `ioctl` there. Any `ioctl`
+whose request type byte is 0x94 (`BTRFS_IOCTL_MAGIC`) returns EPERM.
+
+### 8.3 Egress
+
+The egress netns has no uplink at all. Its nft ruleset (input: only new
+TCP to the proxy port from `sbxh*`; forward: drop; output: established
+only), `ip_forward=0` and strict `rp_filter` are set by the control plane.
+The sandbox has no capability over that netns.
+
+The proxy process opens its listening socket *inside* the egress netns,
+switches back to the host netns, drops to `nobody`, and serves CONNECT
+only. It makes upstream connections from the host network, but only to
+allowlisted `host:port` entries. It resolves each name once and connects
+by IP, and it refuses non-global addresses unless that exact IP is
+allowlisted.
+
+### 8.4 Crash recovery
+
+`reconcile()` runs on every control-plane start. It tears down any
+sandbox whose state isn't `ready` or whose PID 1 is gone (checked by pid
+*and* process start time). It also removes any subvolume, cgroup, host
+mount or egress veth that has no state file, and thaws adopted sandboxes,
+since a crash during fork can leave the parent frozen. Holder processes
+from before their pid was recorded are found by command line. Only one
+control plane may own a `run_dir` (an flock), so a second instance can't
+reconcile away a sandbox that is still being created.
+
+### 8.5 dev_mode
+
+`storage: "copy"` (full `cp -a --reflink=auto`) and running without
+cgroup v2 are allowed only with `dev_mode: true`. dev_mode exists so the
+lifecycle, network and containment code can be tested on hosts without
+btrfs or cgroup v2. It is recorded in every sandbox's metadata. Without
+cgroups, fork cannot freeze the parent and nothing is resource-limited.
+The benchmark harness refuses to produce claim-grade output in this mode.

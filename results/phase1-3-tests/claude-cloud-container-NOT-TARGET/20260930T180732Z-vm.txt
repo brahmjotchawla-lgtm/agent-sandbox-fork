@@ -1,0 +1,74 @@
+# command: sudo python3 -m pytest tests -v -rsx -p no:cacheprovider
+# host: Linux 6.18.44-fc-v50 x86_64; Intel(R) Xeon(R) Processor @ 2.10GHz; 4 cpus
+# NOT the target host: kernel has no btrfs (copy backend, dev_mode) and no cgroup v2 controllers.
+# git: 1424b28 + uncommitted working tree at time of run
+
+============================= test session starts ==============================
+platform linux -- Python 3.11.15, pytest-9.1.1, pluggy-1.6.0 -- /usr/local/bin/python3
+agent-sandbox: storage=copy (dev_mode) cgroup_v2=NO (dev_mode, limits not enforced)
+rootdir: /home/user/agent-sandbox-fork
+collecting ... collected 56 items
+
+tests/test_adversarial.py::test_cannot_see_host_processes PASSED         [  1%]
+tests/test_adversarial.py::test_chroot_breakout_stays_inside PASSED      [  3%]
+tests/test_adversarial.py::test_proc_1_root_is_sandbox_root PASSED       [  5%]
+tests/test_adversarial.py::test_cannot_mknod_or_mount_host_devices PASSED [  7%]
+tests/test_adversarial.py::test_cannot_load_kernel_modules PASSED        [  8%]
+tests/test_adversarial.py::test_reboot_only_kills_own_sandbox PASSED     [ 10%]
+tests/test_adversarial.py::test_host_sysctls_and_sysrq_not_writable PASSED [ 12%]
+tests/test_adversarial.py::test_nested_userns_cannot_map_host_root PASSED [ 14%]
+tests/test_adversarial.py::test_kill_all_only_hits_sandbox PASSED        [ 16%]
+tests/test_adversarial.py::test_control_socket_not_visible PASSED        [ 17%]
+tests/test_crash.py::test_crash_during_create[create:after_state] PASSED [ 19%]
+tests/test_crash.py::test_crash_during_create[create:after_snapshot] PASSED [ 21%]
+tests/test_crash.py::test_crash_during_create[start:after_cgroup] PASSED [ 23%]
+tests/test_crash.py::test_crash_during_create[start:after_mount] PASSED  [ 25%]
+tests/test_crash.py::test_crash_during_create[start:after_holder] PASSED [ 26%]
+tests/test_crash.py::test_crash_during_create[start:after_network] PASSED [ 28%]
+tests/test_crash.py::test_crash_during_fork[fork:after_state] PASSED     [ 30%]
+tests/test_crash.py::test_crash_during_fork[fork:while_frozen] PASSED    [ 32%]
+tests/test_crash.py::test_crash_during_fork[fork:after_snapshot] PASSED  [ 33%]
+tests/test_crash.py::test_crash_during_fork[start:after_holder] PASSED   [ 35%]
+tests/test_crash.py::test_crash_during_fork[start:after_network] PASSED  [ 37%]
+tests/test_crash.py::test_orphans_without_state_are_removed PASSED       [ 39%]
+tests/test_lifecycle.py::test_exec_basics PASSED                         [ 41%]
+tests/test_lifecycle.py::test_sandbox_is_its_own_pid_namespace PASSED    [ 42%]
+tests/test_lifecycle.py::test_sandbox_root_is_unprivileged_on_host PASSED [ 44%]
+tests/test_lifecycle.py::test_files_are_stored_with_in_sandbox_owner PASSED [ 46%]
+tests/test_lifecycle.py::test_destroy_releases_everything PASSED         [ 48%]
+tests/test_lifecycle.py::test_invalid_ids_rejected[../../etc] PASSED     [ 50%]
+tests/test_lifecycle.py::test_invalid_ids_rejected[sbx-../../x] PASSED   [ 51%]
+tests/test_lifecycle.py::test_invalid_ids_rejected[] PASSED              [ 53%]
+tests/test_lifecycle.py::test_invalid_ids_rejected[None] PASSED          [ 55%]
+tests/test_lifecycle.py::test_invalid_ids_rejected[sbx-ZZZZZZZZZZZZ] PASSED [ 57%]
+tests/test_lifecycle.py::test_fork_isolation PASSED                      [ 58%]
+tests/test_lifecycle.py::test_fork_starts_fresh_process_tree PASSED      [ 60%]
+tests/test_lifecycle.py::test_fork_chain PASSED                          [ 62%]
+tests/test_lifecycle.py::test_siblings_independent PASSED                [ 64%]
+tests/test_lifecycle.py::test_fork_during_active_io XFAIL (no cgroup...) [ 66%]
+tests/test_lifecycle.py::test_exec_timeout PASSED                        [ 67%]
+tests/test_lifecycle.py::test_exec_output_is_capped PASSED               [ 69%]
+tests/test_lifecycle.py::test_exec_on_dead_holder_errors_and_destroy_still_cleans PASSED [ 71%]
+tests/test_lifecycle.py::test_second_manager_refused PASSED              [ 73%]
+tests/test_lifecycle.py::test_memory_limit_enforced SKIPPED (host ha...) [ 75%]
+tests/test_lifecycle.py::test_pids_limit_contains_fork_bomb SKIPPED      [ 76%]
+tests/test_lifecycle.py::test_fork_under_memory_pressure SKIPPED (ho...) [ 78%]
+tests/test_network.py::test_no_route_to_internet PASSED                  [ 80%]
+tests/test_network.py::test_host_services_unreachable PASSED             [ 82%]
+tests/test_network.py::test_allowlisted_destination_via_proxy PASSED     [ 83%]
+tests/test_network.py::test_non_allowlisted_denied PASSED                [ 85%]
+tests/test_network.py::test_plain_http_forwarding_refused PASSED         [ 87%]
+tests/test_network.py::test_hostname_resolving_to_private_address_refused PASSED [ 89%]
+tests/test_network.py::test_root_cannot_route_around_egress_netns PASSED [ 91%]
+tests/test_network.py::test_root_cannot_modify_egress_rules PASSED       [ 92%]
+tests/test_network.py::test_siblings_cannot_reach_each_other PASSED      [ 94%]
+tests/test_network.py::test_source_spoofing_dropped PASSED               [ 96%]
+tests/test_seccomp.py::test_btrfs_ioctls_blocked PASSED                  [ 98%]
+tests/test_seccomp.py::test_no_new_privs_and_seccomp_on_every_process PASSED [100%]
+
+=========================== short test summary info ============================
+SKIPPED [1] tests/test_lifecycle.py:177: host has no cgroup v2 unified hierarchy
+SKIPPED [1] tests/test_lifecycle.py:184: host has no cgroup v2 unified hierarchy
+SKIPPED [1] tests/test_lifecycle.py:191: host has no cgroup v2 unified hierarchy
+XFAIL tests/test_lifecycle.py::test_fork_during_active_io - no cgroup freeze in dev mode: snapshot races the writer
+============= 52 passed, 3 skipped, 1 xfailed in 175.82s (0:02:55) =============

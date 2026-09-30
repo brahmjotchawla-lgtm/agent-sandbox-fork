@@ -1,0 +1,11 @@
+{
+  "store_root": "/var/lib/agent-sandbox",
+  "run_dir": "/run/agent-sandbox",
+  "storage": "btrfs",
+  "cgroup_root": "/sys/fs/cgroup/agent-sandbox",
+  "memory_max": "2G",
+  "pids_max": 1024,
+  "network": true,
+  "egress_allowlist": ["api.anthropic.com:443", "pypi.org:443", "files.pythonhosted.org:443"],
+  "dev_mode": false
+}
