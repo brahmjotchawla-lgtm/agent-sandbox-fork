@@ -10,6 +10,8 @@ import json
 import os
 import shutil
 import socket
+import subprocess
+import sys
 import time
 import uuid
 
@@ -217,18 +219,103 @@ def test_one_sandbox_cannot_starve_siblings_of_the_proxy(mgr, sandbox, upstream)
     assert "200" in res and time.monotonic() - t < 5, res
 
 
-# ---- known limitations: pinned so a fix (or regression) shows up -------------
+# ---- exec supervision --------------------------------------------------------
 
-def test_KNOWN_LIMITATION_setsid_escapes_exec_timeout(mgr, sandbox):
-    """DESIGN.md §5.3: exec(timeout) kills the process group; a command that
-    setsid()s keeps running inside the sandbox until destroy. This asserts
-    the CURRENT (limited) behaviour, and that it stays inside the sandbox."""
-    r = mgr.exec(sandbox, ["python3", "-c",
-                           "import os, time; os.setsid(); open('/tmp/alive','w'); time.sleep(600)"],
-                 timeout=1)
-    assert r["timed_out"]
-    procs = mgr.exec(sandbox, ["sh", "-c", "cat /proc/[0-9]*/cmdline | tr '\\0' ' '"])["stdout"]
-    assert "time.sleep(600)" in procs  # survived the timeout (the limitation)
-    st = mgr._load(sandbox)
-    mgr.destroy(sandbox)  # ...and destroy still removes it with the sandbox
-    assert not os.path.exists(st["subvol"])
+ESCAPER = r"""
+import os, time
+os.setsid()
+if os.fork():           # double fork: the grandchild is orphaned immediately
+    os._exit(0)
+os.setsid()
+if os.fork():
+    os._exit(0)
+open('/tmp/escaper.pid', 'w').write(str(os.getpid()))
+while True:
+    time.sleep(1)
+"""
+
+
+def test_exec_timeout_kills_setsid_and_double_forked_descendants(mgr, sandbox):
+    t = time.monotonic()
+    r = mgr.exec(sandbox, ["sh", "-c", f"python3 -c \"$0\"; sleep 600", ESCAPER], timeout=2)
+    assert r["timed_out"] and time.monotonic() - t < 10
+    pid = mgr.exec(sandbox, ["cat", "/tmp/escaper.pid"])["stdout"].strip()
+    assert pid
+    assert mgr.exec(sandbox, ["test", "-e", f"/proc/{pid}"])["exit_code"] == 1, \
+        "escaped process survived the exec timeout"
+
+
+def test_background_processes_survive_normal_exec_exit(mgr, sandbox):
+    """Deliberate daemons (nohup x &) must outlive the exec that started them."""
+    mgr.exec(sandbox, ["sh", "-c", "nohup sleep 600 >/dev/null 2>&1 & echo $! > /tmp/bg"])
+    pid = mgr.exec(sandbox, ["cat", "/tmp/bg"])["stdout"].strip()
+    time.sleep(0.3)
+    assert mgr.exec(sandbox, ["test", "-e", f"/proc/{pid}"])["exit_code"] == 0
+
+
+def test_host_side_helpers_not_inspectable_from_sandbox(mgr, sandbox):
+    """PID 1 and the exec supervisor are host binaries running in the
+    sandbox's PID namespace. Sandbox root must not be able to open their
+    /proc/<pid>/exe, mem or environ (the CVE-2019-5736 class of attack)."""
+    mgr.exec(sandbox, ["sh", "-c", "sleep 30 >/dev/null 2>&1 &"])
+    code = r"""
+import os, json
+res = {}
+for p in os.listdir('/proc'):
+    if not p.isdigit() or int(p) == os.getpid():  # our own source mentions nsinit.py
+        continue
+    try:
+        cmd = open(f'/proc/{p}/cmdline', 'rb').read()
+    except OSError:
+        continue
+    if b'nsinit.py' not in cmd:
+        continue
+    for f in ('exe', 'mem', 'environ'):
+        try:
+            os.close(os.open(f'/proc/{p}/{f}', os.O_RDONLY)); res[f'{p}/{f}'] = 'OPENED'
+        except OSError as e:
+            res[f'{p}/{f}'] = e.errno
+print(json.dumps(res))
+"""
+    res = json.loads(out(mgr, sandbox, code))
+    assert len(res) >= 6, res  # PID 1 + the supervisor running this probe, 3 files each
+    assert "OPENED" not in res.values(), res
+
+
+# ---- a compromised proxy ----------------------------------------------------
+
+AS_PROXY = r"""
+import socket, sys
+s = socket.socket(); s.settimeout(2)
+try:
+    s.connect((sys.argv[1], int(sys.argv[2]))); print('CONNECTED')
+except OSError as e:
+    print('BLOCKED', type(e).__name__)
+"""
+
+
+def _connect_as(uid, host, port):
+    return subprocess.run([sys.executable, "-I", "-c", AS_PROXY, host, str(port)], user=uid,
+                          group=uid, capture_output=True, text=True, timeout=30).stdout.strip()
+
+
+def test_compromised_proxy_cannot_pivot_to_host_services(mgr, upstream):
+    """Run attacker code as the proxy's uid in the host netns: what an RCE
+    in the proxy would get. The kernel must hold it to the allowlist, while
+    another uid can reach the same host services (control)."""
+    uid = mgr.cfg.proxy_uid
+    listener = socket.socket()
+    listener.bind(("0.0.0.0", 0))
+    listener.listen(16)
+    port = listener.getsockname()[1]
+    try:
+        host_ip = next(ip for ip in subprocess.run(["hostname", "-I"], capture_output=True,
+                                                   text=True).stdout.split() if ":" not in ip)
+        for target in ("127.0.0.1", host_ip):
+            assert _connect_as(65534, target, port) == "CONNECTED", "control failed"
+            assert _connect_as(uid, target, port).startswith("BLOCKED"), target
+        assert _connect_as(uid, "169.254.169.254", 80).startswith("BLOCKED")
+        # ...while what the allowlist names still works.
+        assert _connect_as(uid, "127.0.0.1", upstream.port) == "CONNECTED"
+    finally:
+        listener.close()

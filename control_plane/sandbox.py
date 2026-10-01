@@ -78,6 +78,7 @@ class Manager:
             self._procs: dict[str, subprocess.Popen] = {}
             if self.net:
                 self.net.setup()
+                self.net.setup_proxy_filter(cfg.proxy_uid, cfg.egress_allowlist)
                 self._ensure_proxy()
             self.last_reconcile = self.reconcile()
         except BaseException:
@@ -293,10 +294,8 @@ class Manager:
                     and "\0" not in k + v):
                 raise SandboxError(f"invalid env entry {k!r}")
             senv[k] = v
-        ns = ["nsenter", "-t", str(st["holder_pid"]), "-U", "-m", "-u", "-i", "-n", "-p", "-C", "-r"]
-        ns.append(f"--wdns={cwd}" if cwd else "-w")
-        argv = [PYTHON, "-I", "-S", NSINIT, "enter", self.cg.path(sandbox_id) or "-", "--",
-                *ns, "--", *cmd]
+        argv = [PYTHON, "-I", "-S", NSINIT, "exec", self.cg.path(sandbox_id) or "-",
+                str(st["holder_pid"]), cwd or "/", "--", *cmd]
         t0 = time.monotonic()
         proc = subprocess.Popen(argv, stdin=subprocess.PIPE if stdin is not None else subprocess.DEVNULL,
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=senv,
@@ -416,7 +415,8 @@ class Manager:
         pidfile = self._dir("proxy.json")
         try:
             info = read_json(pidfile)
-            if pid_alive(info["pid"], info["start"]) and info["allow"] == self.cfg.egress_allowlist:
+            if (pid_alive(info["pid"], info["start"]) and info["allow"] == self.cfg.egress_allowlist
+                    and info.get("uid") == self.cfg.proxy_uid):
                 return
             if pid_alive(info["pid"], info["start"]):
                 os.kill(info["pid"], signal.SIGKILL)
@@ -424,7 +424,7 @@ class Manager:
         except (FileNotFoundError, ValueError, KeyError):
             pass
         argv = [PYTHON, "-I", PROXY, "--netns", self.net.netns_path,
-                "--port", str(self.cfg.proxy_port)]
+                "--port", str(self.cfg.proxy_port), "--uid", str(self.cfg.proxy_uid)]
         for a in self.cfg.egress_allowlist:
             argv += ["--allow", a]
         log = open(self._dir("proxy.log"), "a")
@@ -435,7 +435,7 @@ class Manager:
         if not ok or proc.poll() is not None:
             raise SandboxError(f"egress proxy failed to start: {_tail(self._dir('proxy.log'))}")
         write_json_atomic(pidfile, {"pid": proc.pid, "start": proc_start_time(proc.pid),
-                                    "allow": self.cfg.egress_allowlist})
+                                    "allow": self.cfg.egress_allowlist, "uid": self.cfg.proxy_uid})
 
 
 def _find_holders(sid: str) -> list[int]:
@@ -490,11 +490,15 @@ def _capture(proc: subprocess.Popen, stdin: str | None, timeout: float | None):
     try:
         proc.wait(timeout=timeout)
     except subprocess.TimeoutExpired:
-        # Kills the wrapper/nsenter and the command unless it setsid()'d away;
-        # anything that escaped the process group stays inside the sandbox
-        # (and its cgroup) until destroy.
-        os.killpg(proc.pid, signal.SIGKILL)
-        proc.wait()
+        # SIGTERM makes the in-sandbox supervisor kill the command's whole
+        # process tree (it is a child subreaper, so setsid()/double-fork
+        # cannot leave it). SIGKILL the wrapper's group only as a fallback.
+        proc.send_signal(signal.SIGTERM)
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            os.killpg(proc.pid, signal.SIGKILL)
+            proc.wait()
         for t in threads:
             t.join(1)
         return None, None

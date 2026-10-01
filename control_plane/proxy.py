@@ -4,7 +4,9 @@ The listening socket is created *inside* the egress netns (the only netns a
 sandbox can reach), then the process switches back to the host netns and
 drops to an unprivileged user before serving. Upstream connections are
 therefore made from the host network, but the only thing sandboxes can
-connect to is this one socket.
+connect to is this one socket. Those upstream connections are themselves
+fenced by a host nft table keyed on the proxy's dedicated uid, so even a
+compromised proxy can only reach what the allowlist names.
 
 Deliberately minimal: CONNECT only, no plain HTTP forwarding, no admin
 surface, no state shared between connections. Hostname allowlist entries
@@ -14,7 +16,7 @@ link-local incl. 169.254.169.254, CGNAT, multicast...) is refused unless
 the allowlist names that exact IP.
 
     python3 -m control_plane.proxy --netns /run/netns/sbx-egress --port 3128 \
-        --allow api.example.com:443 --allow 10.0.0.5:8000
+        --uid 999999 --allow api.example.com:443 --allow 10.0.0.5:8000
 """
 from __future__ import annotations
 
@@ -24,7 +26,6 @@ import ctypes
 import ipaddress
 import json
 import os
-import pwd
 import socket
 import sys
 import time
@@ -182,11 +183,11 @@ def listen_in_netns(netns_path: str, port: int) -> socket.socket:
     return sock
 
 
-def drop_privileges(user: str) -> None:
-    pw = pwd.getpwnam(user)
+def drop_privileges(uid: int) -> None:
+    # A dedicated uid (not "nobody"): the host nft filter keys on it.
     os.setgroups([])
-    os.setresgid(pw.pw_gid, pw.pw_gid, pw.pw_gid)
-    os.setresuid(pw.pw_uid, pw.pw_uid, pw.pw_uid)
+    os.setresgid(uid, uid, uid)
+    os.setresuid(uid, uid, uid)
 
 
 async def serve(sock: socket.socket, proxy: Proxy):
@@ -201,11 +202,11 @@ def main(argv=None):
     ap.add_argument("--netns", required=True)
     ap.add_argument("--port", type=int, default=3128)
     ap.add_argument("--allow", action="append", default=[])
-    ap.add_argument("--user", default="nobody")
+    ap.add_argument("--uid", type=int, required=True)
     args = ap.parse_args(argv)
     policy = Policy(parse_allow(args.allow))
     sock = listen_in_netns(args.netns, args.port)
-    drop_privileges(args.user)
+    drop_privileges(args.uid)
     asyncio.run(serve(sock, Proxy(policy)))
 
 

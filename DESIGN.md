@@ -267,14 +267,13 @@ that attacking its own sandbox is a viable strategy. The design assumes:
   PID cgroup accounting) unless specifically tested in Phase 4 and listed
   as covered there.
 - **Known gaps found during implementation** (not yet addressed):
-  - `exec(timeout=...)` kills the command's process group. A command that
-    calls `setsid()` escapes the timeout and keeps running *inside* the
-    sandbox (still in its cgroup and namespaces) until `destroy`.
-  - The proxy runs in the host netns as `nobody`. If it were compromised,
-    the attacker could reach whatever `nobody` on the host network can,
-    including host-local services, so its SSRF filtering is a mitigation
-    and doesn't prove anything. Moving upstream traffic into a dedicated
-    uplink netns with its own nft allowlist would bound this; that isn't
+  - The proxy's upstream sockets are fenced in the kernel by owner uid
+    (§8.3). Without hostnames the kernel can't enforce *which* public host
+    is reached, so a compromised proxy could still reach any **public**
+    IPv4 address on an allowlisted hostname entry's port, plus DNS to the
+    configured resolvers. Host-local and private destinations are dropped
+    unless an allowlist entry names that exact IP. A dedicated uplink netns
+    with per-destination nft sets would narrow this further; that isn't
     implemented.
   - The egress rules are IPv4-only. IPv6 is disabled in the egress and
     sandbox netns when the kernel has IPv6 at all. Sandboxed root can
@@ -308,8 +307,9 @@ veth interfaces.
 
 As implemented (§8.3), the proxy's *listening socket* lives in the egress
 netns. The proxy *process* makes its upstream connections from the host
-netns after dropping to `nobody`. The egress netns itself has no path to
-the host or the internet. The residual risk this leaves is listed in §5.3.
+netns after dropping to a dedicated uid, fenced by a host nft table keyed on
+that uid (§8.3). The egress netns itself has no path to the host or the
+internet. The residual risk this leaves is listed in §5.3.
 
 ### 5.5 Control plane as trusted computing base
 
@@ -359,11 +359,12 @@ defence exists, or the gap is documented, but nothing here verifies it.
 | Hostile filenames or permissions breaking destroy | `test_hostile_filenames_do_not_break_destroy` | pass |
 | Mounts leaking to forks or the host | `test_sandbox_mounts_do_not_reach_forks_or_host` | pass |
 | Host fds or env leaking into exec | `test_exec_leaks_no_host_fds_or_env` | pass (mutation-checked) |
-| Outlive an exec timeout via `setsid()` | `test_KNOWN_LIMITATION_setsid_escapes_exec_timeout` | **known limitation** (stays inside the sandbox; removed on destroy) |
+| Outlive an exec timeout via `setsid()` and double-fork | `test_exec_timeout_kills_setsid_and_double_forked_descendants` | pass (subreaper supervisor; mutation-checked). Deliberate daemons from a *completed* exec still survive (`test_background_processes_survive_normal_exec_exit`) |
+| Open `/proc/<pid>/{exe,mem,environ}` of host-binary helpers in the sandbox (CVE-2019-5736 class) | `test_host_side_helpers_not_inspectable_from_sandbox` | pass. The protection comes from the kernel clearing *dumpable* on the host-root to sandbox-uid switch; the explicit `PR_SET_DUMPABLE 0` is redundant (removing it didn't fail the test) |
 | Memory, pids and fork-bomb exhaustion | `test_lifecycle::test_memory_limit_enforced`, `test_pids_limit_contains_fork_bomb` | **skipped**: no cgroup v2 on this host |
 | Writing own cgroup limits (mount cgroup2 inside) | none | **not tested**: needs cgroup v2 |
 | Disk exhaustion | none | **known limitation** (§5.3), deliberately not run: it would fill the host disk |
-| Proxy compromise, then host-network access as `nobody` | none | **known limitation** (§5.3) |
+| Compromised proxy pivoting to host-local or internal services | `test_compromised_proxy_cannot_pivot_to_host_services` | pass (owner-uid nft fence; control uid reaches the same ports; mutation-checked). Residual: any public IPv4 on allowlisted ports (§5.3) |
 | Kernel 0-days, side channels | none | out of scope (§5.3) |
 
 ## 6. API surface
@@ -432,10 +433,17 @@ The code is `control_plane/sandbox.py` (`Manager._start`) plus
    (`sbxh<slot>` in the egress netns, `eth0` in the sandbox). The sandbox
    gets only a /30 connected route, with no default route.
 
-`exec` runs `nsinit.py enter`, which joins the cgroup and sets the same
-seccomp filter, then execs `nsenter` into all the sandbox's namespaces
-with the sandbox's root and working directory. Environment variables are
-set explicitly; nothing is inherited from the control plane.
+`exec` runs `nsinit.py exec`. It joins the cgroup, applies the same
+seccomp filter, and `setns()`es into the sandbox's namespaces (user
+first, so it holds no host capabilities afterwards), then switches to
+sandbox root. It forks once into the sandbox's PID namespace. That child
+is a **child subreaper** supervising the command: anything the command
+spawns, even after `setsid()` and double-forking, re-parents to the
+supervisor rather than to PID 1. On timeout the control plane sends
+SIGTERM and the supervisor SIGKILLs its whole descendant tree, rescanning
+until it is empty. When the command exits normally, deliberate background
+processes are left alone and re-parent to PID 1. Environment variables
+are set explicitly; nothing is inherited from the control plane.
 
 ### 8.2 seccomp filter
 
@@ -452,8 +460,13 @@ only), `ip_forward=0` and strict `rp_filter` are set by the control plane.
 The sandbox has no capability over that netns.
 
 The proxy process opens its listening socket *inside* the egress netns,
-switches back to the host netns, drops to `nobody`, and serves CONNECT
-only. It makes upstream connections from the host network, but only to
+switches back to the host netns, drops to a dedicated uid (`proxy_uid`,
+outside every sandbox range), and serves CONNECT only. A host nft table
+(`sbx_proxy_<uid>`) matches that uid's sockets (`meta skuid`) and drops
+everything except DNS to the configured resolvers, explicitly
+allowlisted `IP:port` entries, and non-private IPv4 destinations on the
+ports of hostname entries. So the allowlist is enforced twice: in the
+proxy, and in the kernel where a compromised proxy can't change it. It makes upstream connections from the host network, but only to
 allowlisted `host:port` entries. It resolves each name once and connects
 by IP, and it refuses non-global addresses unless that exact IP is
 allowlisted.

@@ -39,6 +39,11 @@ class Config:
     # link-local addresses; an IP entry is an explicit opt-in to that address.
     egress_allowlist: list[str] = dataclasses.field(default_factory=list)
     proxy_port: int = 3128
+    # The proxy drops to this uid/gid (no passwd entry needed). A host nft
+    # table matches its sockets by owner uid and only lets them reach what
+    # the allowlist names (control_plane/network.py, proxy_filter_ruleset).
+    # Must not overlap any sandbox's host uid range.
+    proxy_uid: int = 999_999
 
     dev_mode: bool = False
 
@@ -63,5 +68,8 @@ class Config:
             raise RuntimeError("only x86_64 is supported (seccomp filter uses x86_64 syscall numbers)")
         if self.storage not in ("btrfs", "copy"):
             raise ValueError(f"unknown storage backend {self.storage!r}")
+        top = self.uid_base + self.max_sandboxes * 65536
+        if self.uid_base <= self.proxy_uid < top or self.proxy_uid == 0:
+            raise ValueError(f"proxy_uid {self.proxy_uid} overlaps sandbox uid ranges or is root")
         if self.storage == "copy" and not self.dev_mode:
             raise ValueError("storage='copy' is a full-copy dev backend; it requires dev_mode=true")

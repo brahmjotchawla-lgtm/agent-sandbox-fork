@@ -71,7 +71,7 @@ sudo python3 bench/fork_vs_restart.py --config /etc/agent-sandbox.json --trials 
 | Crash mid-create / mid-fork, then reconcile (11 injection points) | tested, pass | not run |
 | Egress: no route out, host unreachable, proxy allowlist, SSRF-to-private refusal, root re-routing, rule tampering, sibling reach, IP spoofing | tested, pass | not run |
 | seccomp (btrfs ioctls, `no_new_privs`) | tested, pass | not run |
-| Phase 4 adversarial suite: 30 attack rows, see [DESIGN.md §5.6](DESIGN.md#56-adversarial-coverage-phase-4) | pass, except rows marked known limitation, skipped or not tested there | not run |
+| Phase 4 adversarial suite: 32 attack rows, see [DESIGN.md §5.6](DESIGN.md#56-adversarial-coverage-phase-4) | pass, except rows marked known limitation, skipped or not tested there | not run |
 | btrfs snapshot / delete, fork during active I/O (freeze) | **not testable here** (xfail) | not run |
 | cgroup limits (memory, pids, fork-under-memory-pressure) | **skipped: no cgroup v2** | not run |
 | Benchmark harness | smoke-tested; output correctly marked invalid, not committed | not run |

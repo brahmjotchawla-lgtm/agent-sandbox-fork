@@ -80,6 +80,7 @@ def cfg(upstream, tmp_path_factory):
         dev_mode=not (BTRFS_ROOT and HAVE_CGROUP2),
         egress_allowlist=[f"127.0.0.1:{upstream.port}", f"localhost:{upstream.port}"],
         proxy_port=3128,
+        proxy_uid=990_000 + int(tag, 16) % 9000,
     )
     if subprocess.run(["docker", "image", "inspect", TEST_IMAGE], capture_output=True).returncode:
         subprocess.run(["docker", "pull", "-q", TEST_IMAGE], check=True)
@@ -94,6 +95,7 @@ def cfg(upstream, tmp_path_factory):
     m.close()
     netns = m._netns_name()
     subprocess.run(["ip", "netns", "del", netns], capture_output=True)
+    subprocess.run(["nft", "delete", "table", "inet", f"sbx_proxy_{c.proxy_uid}"], capture_output=True)
     shutil.rmtree(store, ignore_errors=True)
     shutil.rmtree(c.run_dir, ignore_errors=True)
     if HAVE_CGROUP2 and os.path.isdir(c.cgroup_root):

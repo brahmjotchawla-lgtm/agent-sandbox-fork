@@ -5,8 +5,12 @@ Run by the control plane as host root, directly as a script
 stdlib. Two modes:
 
 ``holder``  Create a sandbox's namespaces and become its PID 1.
-``enter``   Wrap ``nsenter`` for ``exec``: join the sandbox's cgroup and
-            apply the same seccomp filter, then exec nsenter.
+``exec``    Run one command in a sandbox (the control plane's ``exec``):
+            join its cgroup and namespaces, then supervise the command as
+            a child subreaper so a timeout can kill everything it started.
+``enter``   Join the cgroup, apply seccomp, exec an arbitrary host command
+            (used by tests to give the adversary host tools such as ip/nft
+            with exactly sandbox-root privileges).
 
 Both modes set no_new_privs and install the seccomp filter *before* any
 sandbox code can run, so every process in a sandbox inherits them.
@@ -47,6 +51,8 @@ MS_PRIVATE = 1 << 18
 MNT_DETACH = 2
 
 PR_SET_PDEATHSIG = 1
+PR_SET_DUMPABLE = 4
+PR_SET_CHILD_SUBREAPER = 36
 PR_SET_NO_NEW_PRIVS = 38
 PR_SET_SECCOMP = 22
 SECCOMP_MODE_FILTER = 2
@@ -233,6 +239,128 @@ def holder(cgroup, host_base, rootfs, hostname):
     os._exit(os.waitstatus_to_exitcode(status) & 0xFF)
 
 
+NS_ORDER = ("user", "mnt", "uts", "ipc", "net", "cgroup", "pid")
+
+
+def exit_like(status):
+    """Exit the way a child with this wait status did (signal or code)."""
+    if os.WIFSIGNALED(status):
+        sig = os.WTERMSIG(status)
+        signal.signal(sig, signal.SIG_DFL)
+        os.kill(os.getpid(), sig)
+    os._exit(os.waitstatus_to_exitcode(status) & 0xFF)
+
+
+def descendants(root):
+    """All live descendants of pid ``root`` (pids as seen in our /proc)."""
+    parent = {}
+    for p in os.listdir("/proc"):
+        if p.isdigit():
+            try:
+                with open("/proc/%s/stat" % p) as f:
+                    parent[int(p)] = int(f.read().rsplit(")", 1)[1].split()[1])
+            except (OSError, ValueError, IndexError):
+                pass
+    out, frontier = [], [root]
+    while frontier:
+        kids = [p for p, pp in parent.items() if pp in frontier]
+        out += kids
+        frontier = kids
+    return out
+
+
+def kill_tree(rounds=200):
+    """SIGKILL every descendant, repeating until none are left (a process
+    may fork between our scan and our kill). Orphans re-parent to us because
+    we are a child subreaper, so nothing can leave the tree by
+    double-forking or setsid()."""
+    me = os.getpid()
+    for _ in range(rounds):
+        victims = descendants(me)
+        if not victims:
+            return True
+        for v in victims:
+            try:
+                os.kill(v, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        while True:
+            try:
+                if os.waitpid(-1, os.WNOHANG)[0] == 0:
+                    break
+            except ChildProcessError:
+                break
+    return False
+
+
+def execvp_noimport(argv):
+    """execvp without os.execvpe, which lazily imports stdlib modules that
+    no longer exist once we are inside the sandbox's mount namespace.
+    Returns the error if no candidate could be executed."""
+    env = dict(os.environ)
+    names = [argv[0]] if "/" in argv[0] else [
+        d.rstrip("/") + "/" + argv[0] for d in env.get("PATH", "/usr/bin:/bin").split(":") if d]
+    err = OSError(2, "No such file or directory")
+    for path in names:
+        try:
+            os.execve(path, argv, env)
+        except OSError as e:
+            if e.errno != 2 or err.errno == 2:  # prefer EACCES etc. over ENOENT
+                err = e
+    return err
+
+
+def supervise(argv):
+    """Runs inside the sandbox PID namespace as the command's parent."""
+    check(libc.prctl(PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0), "subreaper")
+    # If the host-side wrapper dies (e.g. SIGKILLed), take the tree down.
+    check(libc.prctl(PR_SET_PDEATHSIG, signal.SIGTERM, 0, 0, 0), "pdeathsig")
+
+    def on_term(*_):
+        kill_tree()
+        os._exit(137)
+
+    for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+        signal.signal(sig, on_term)
+    cmd = os.fork()
+    if cmd == 0:
+        for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+            signal.signal(sig, signal.SIG_DFL)
+        e = execvp_noimport(argv)
+        os.write(2, ("exec %s: %s\n" % (argv[0], e.strerror)).encode())
+        os._exit(127 if e.errno == 2 else 126)
+    while True:
+        pid, status = os.wait()
+        if pid == cmd:
+            # Background processes the command started on purpose keep
+            # running: when we exit they re-parent to the sandbox's PID 1.
+            exit_like(status)
+
+
+def sandbox_exec(cgroup, target, cwd, argv):
+    """exec mode: host root -> sandbox root, then fork into its PID ns."""
+    join_cgroup(cgroup)
+    harden()
+    fds = [(os.open("/proc/%d/ns/%s" % (target, n), os.O_RDONLY), n) for n in NS_ORDER]
+    for fd, name in fds:  # user first: afterwards we hold no host capabilities
+        check(libc.setns(fd, 0), "setns " + name)
+        os.close(fd)
+    os.setgroups([0])
+    os.setresgid(0, 0, 0)
+    os.setresuid(0, 0, 0)
+    # This process runs a host binary inside the sandbox's view; make sure
+    # sandbox root cannot open its /proc/<pid>/{exe,mem,environ} or ptrace it.
+    check(libc.prctl(PR_SET_DUMPABLE, 0, 0, 0, 0), "dumpable")
+    os.chdir(cwd)  # setns(mnt) already moved our root to the sandbox root
+    child = os.fork()
+    if child == 0:
+        supervise(argv)
+    for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+        signal.signal(sig, lambda s, _f: os.kill(child, signal.SIGTERM))
+    _, status = os.waitpid(child, 0)
+    exit_like(status)
+
+
 def enter(cgroup, argv):
     join_cgroup(cgroup)
     harden()
@@ -245,6 +373,12 @@ def main(argv):
             # holder CGROUP|- HOST_UID_BASE ROOTFS HOSTNAME
             cg = None if argv[1] == "-" else argv[1]
             holder(cg, int(argv[2]), argv[3], argv[4])
+        elif argv[0] == "exec":
+            # exec CGROUP|- HOLDER_PID CWD -- CMD...
+            cg = None if argv[1] == "-" else argv[1]
+            if argv[4] != "--" or len(argv) < 6:
+                raise SystemExit("usage: exec CGROUP PID CWD -- CMD...")
+            sandbox_exec(cg, int(argv[2]), argv[3], argv[5:])
         elif argv[0] == "enter":
             # enter CGROUP|- -- CMD...
             cg = None if argv[1] == "-" else argv[1]

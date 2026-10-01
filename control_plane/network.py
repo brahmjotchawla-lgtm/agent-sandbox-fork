@@ -54,6 +54,77 @@ table inet sbx_egress {{
 """
 
 
+# Never reachable by hostname allowlist entries (mirrors the proxy's
+# is_global check, enforced again in the kernel).
+PRIVATE_V4 = ("0.0.0.0/8, 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8, 169.254.0.0/16, "
+              "172.16.0.0/12, 192.0.0.0/24, 192.0.2.0/24, 192.168.0.0/16, 198.18.0.0/15, "
+              "198.51.100.0/24, 203.0.113.0/24, 224.0.0.0/4, 240.0.0.0/4")
+
+
+def resolvers(path: str = "/etc/resolv.conf") -> list[str]:
+    out = []
+    try:
+        with open(path) as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) >= 2 and parts[0] == "nameserver":
+                    try:
+                        if ipaddress.ip_address(parts[1]).version == 4:
+                            out.append(parts[1])
+                    except ValueError:
+                        pass
+    except OSError:
+        pass
+    return out
+
+
+def proxy_filter_ruleset(uid: int, allowlist: list[str], dns: list[str]) -> str:
+    """Host-netns nft table that fences the proxy's OWN upstream sockets.
+
+    The proxy enforces the allowlist in userspace; this enforces it again in
+    the kernel, keyed on the proxy's dedicated uid (meta skuid), so a bug or
+    compromise in the proxy cannot turn it into a pivot onto host-local or
+    internal services. The proxy runs without capabilities and cannot alter
+    this table. Allowed, for that uid only:
+      - DNS (53/udp+tcp) to the configured IPv4 resolvers,
+      - each explicitly allowlisted IP:port,
+      - non-private IPv4 destinations on ports named by hostname entries.
+    Everything else from that uid is dropped (and counted).
+    """
+    ip_rules, host_ports = [], set()
+    for entry in allowlist:
+        host, _, port = entry.rpartition(":")
+        host = host.strip("[]")
+        try:
+            ip = ipaddress.ip_address(host)
+        except ValueError:
+            host_ports.add(int(port))
+            continue
+        fam = "ip" if ip.version == 4 else "ip6"
+        if fam == "ip6" and not IPV6_OFF:
+            continue  # kernel without IPv6: nothing to allow
+        ip_rules.append(f"{fam} daddr {ip} tcp dport {int(port)} accept")
+    lines = [f"meta skuid != {uid} accept", "ct state established,related accept"]
+    if dns:
+        d = ", ".join(dns)
+        lines += [f"ip daddr {{ {d} }} udp dport 53 accept", f"ip daddr {{ {d} }} tcp dport 53 accept"]
+    lines += ip_rules
+    if host_ports:
+        ports = ", ".join(str(p) for p in sorted(host_ports))
+        lines.append(f"ip daddr != @private4 tcp dport {{ {ports} }} accept")
+    lines.append("counter drop")
+    body = "\n    ".join(lines)
+    return f"""
+table inet sbx_proxy_{uid} {{
+  set private4 {{ type ipv4_addr; flags interval; elements = {{ {PRIVATE_V4} }} }}
+  chain output {{
+    type filter hook output priority 0; policy accept;
+    {body}
+  }}
+}}
+"""
+
+
 def slot_addrs(slot: int) -> tuple[str, str]:
     """(egress-side gateway, sandbox-side address) of a slot's /30."""
     base = int(SUBNET.network_address) + slot * 4
@@ -87,6 +158,12 @@ class Network:
         ruleset = ("table inet sbx_egress\ndelete table inet sbx_egress\n"
                    + EGRESS_RULESET.format(port=self.proxy_port))
         run(ns + ["nft", "-f", "-"], input=ruleset)
+
+    def setup_proxy_filter(self, uid: int, allowlist: list[str]) -> None:
+        """Load (atomically replace) the host-side fence on the proxy's uid."""
+        table = f"sbx_proxy_{uid}"
+        run(["nft", "-f", "-"], input=f"table inet {table}\ndelete table inet {table}\n"
+            + proxy_filter_ruleset(uid, allowlist, resolvers()))
 
     def attach(self, slot: int, pid: int) -> dict:
         gw, addr = slot_addrs(slot)
