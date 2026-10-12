@@ -51,6 +51,10 @@ pending — Phase 3). First real benchmark run: fork latency vs. Docker
 container restart on the same workspace, raw output committed under
 `/results`, exact command in BENCHMARKS.md.
 
+**Status (Phase 2):** implemented. Kickoff: [docs/phases/phase2.md](docs/phases/phase2.md).
+First benchmark (WSL dev host): [BENCHMARKS.md §4a](BENCHMARKS.md). The fork median wins, but the tail
+is heavy and fan-out at N≥50 loses to `docker run`. Both are open issues.
+
 ## Phase 3 — Containment (~1 week)
 
 Demonstrable: network namespace + veth + egress proxy enforced from
@@ -59,6 +63,10 @@ active; verified no shared mutable state between siblings. Manual
 verification that sandboxed root cannot reach the network except through
 the allowlisted proxy and cannot flush/modify the egress rules (formal
 adversarial suite is Phase 4).
+
+**Status (Phase 3):** controls implemented and checked for existence only
+([docs/phases/phase3.md](docs/phases/phase3.md)). The kickoff risk list was
+written after the code, against the process rule. `io.max` is untested.
 
 ## Phase 4 — Adversarial security test suite (~1 week)
 

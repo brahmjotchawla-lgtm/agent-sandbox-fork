@@ -1,0 +1,80 @@
+command: python3 -m pytest -v tests/
+cwd: /mnt/c/Users/brahm/repos/Sanbox CUH
+started_utc: 2026-10-12T18:40:15.963042+00:00
+finished_utc: 2026-10-12T18:40:56.952543+00:00
+kernel: 6.18.33.2-microsoft-standard-WSL2
+distro: Ubuntu 26.04 LTS
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics x32
+mem_total: 7720672 kB
+virt: wsl
+wsl: True
+python: 3.14.4
+git_commit: 4b9118e5cb028fb3562bb91d015b643b3621e2e0
+git_dirty: False
+------------------------------------------------------------------------
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.0.2, pluggy-1.6.0 -- /usr/bin/python3
+rootdir: /mnt/c/Users/brahm/repos/Sanbox CUH
+configfile: pytest.ini
+plugins: typeguard-4.4.4
+collecting ... collected 55 items
+
+tests/test_containment.py::test_only_route_is_the_point_to_point_link PASSED [  1%]
+tests/test_containment.py::test_allowlisted_destination_works_through_proxy PASSED [  3%]
+tests/test_containment.py::test_proxy_refuses_what_is_not_allowlisted PASSED [  5%]
+tests/test_containment.py::test_proxy_only_speaks_connect PASSED         [  7%]
+tests/test_containment.py::test_allowlisted_name_that_resolves_to_loopback_is_refused PASSED [  9%]
+tests/test_containment.py::test_no_direct_connection_outside_the_proxy PASSED [ 10%]
+tests/test_containment.py::test_proxy_runs_unprivileged PASSED           [ 12%]
+tests/test_containment.py::test_egress_ruleset_unchanged_by_sandbox_activity PASSED [ 14%]
+tests/test_containment.py::test_seccomp_blocks_the_configured_syscalls PASSED [ 16%]
+tests/test_containment.py::test_seccomp_leaves_normal_work_alone PASSED  [ 18%]
+tests/test_containment.py::test_memory_limit_enforced PASSED             [ 20%]
+tests/test_containment.py::test_pids_limit_enforced PASSED               [ 21%]
+tests/test_containment.py::test_cpu_limit_enforced PASSED                [ 23%]
+tests/test_containment.py::test_siblings_have_separate_namespaces_and_state PASSED [ 25%]
+tests/test_failure_paths.py::test_launch_failure_at_each_stage_leaks_nothing[after_userns] PASSED [ 27%]
+tests/test_failure_paths.py::test_launch_failure_at_each_stage_leaks_nothing[after_cgroup] PASSED [ 29%]
+tests/test_failure_paths.py::test_launch_failure_at_each_stage_leaks_nothing[in_pid1] PASSED [ 30%]
+tests/test_failure_paths.py::test_launcher_hung_mid_setup_is_killed_and_cleaned PASSED [ 32%]
+tests/test_failure_paths.py::test_init_killed_from_host PASSED           [ 34%]
+tests/test_failure_paths.py::test_exec_helper_hung_before_setns PASSED   [ 36%]
+tests/test_failure_paths.py::test_destroy_during_running_exec PASSED     [ 38%]
+tests/test_failure_paths.py::test_fork_failure_while_parent_frozen_thaws_parent PASSED [ 40%]
+tests/test_failure_paths.py::test_control_plane_killed_mid_create_then_reconciled PASSED [ 41%]
+tests/test_failure_paths.py::test_control_plane_killed_mid_fork_parent_thawed PASSED [ 43%]
+tests/test_failure_paths.py::test_control_plane_restart_readopts_running_sandbox PASSED [ 45%]
+tests/test_failure_paths.py::test_remote_errors_are_reported_not_fatal PASSED [ 47%]
+tests/test_fork.py::test_child_sees_parent_state_at_fork PASSED          [ 49%]
+tests/test_fork.py::test_fork_isolation_both_directions PASSED           [ 50%]
+tests/test_fork.py::test_child_has_fresh_process_tree_and_identity PASSED [ 52%]
+tests/test_fork.py::test_fork_during_active_io PASSED                    [ 54%]
+tests/test_fork.py::test_fork_while_parent_writes_large_file PASSED      [ 56%]
+tests/test_fork.py::test_fork_under_memory_pressure PASSED               [ 58%]
+tests/test_fork.py::test_deep_fork_chain PASSED                          [ 60%]
+tests/test_fork.py::test_destroy_parent_with_live_children PASSED        [ 61%]
+tests/test_fork.py::test_concurrent_fanout_from_one_parent PASSED        [ 63%]
+tests/test_fork.py::test_fork_of_destroyed_or_unknown_sandbox_fails PASSED [ 65%]
+tests/test_lifecycle.py::test_create_exec_destroy PASSED                 [ 67%]
+tests/test_lifecycle.py::test_user_namespace_maps_root_to_private_host_range PASSED [ 69%]
+tests/test_lifecycle.py::test_idmapped_rootfs_stores_unshifted_ownership PASSED [ 70%]
+tests/test_lifecycle.py::test_no_host_supplementary_groups PASSED        [ 72%]
+tests/test_lifecycle.py::test_siblings_from_same_image_do_not_share_writes PASSED [ 74%]
+tests/test_lifecycle.py::test_mount_table_exposes_no_host_paths PASSED   [ 76%]
+tests/test_lifecycle.py::test_init_is_sealed_memfd PASSED                [ 78%]
+tests/test_lifecycle.py::test_init_survives_signals_from_inside PASSED   [ 80%]
+tests/test_lifecycle.py::test_network_namespace_has_only_loopback PASSED [ 81%]
+tests/test_lifecycle.py::test_exec_nonzero_and_missing_command PASSED    [ 83%]
+tests/test_lifecycle.py::test_exec_killed_by_signal_reports_negative_code PASSED [ 85%]
+tests/test_lifecycle.py::test_exec_stdin_env_cwd PASSED                  [ 87%]
+tests/test_lifecycle.py::test_exec_timeout PASSED                        [ 89%]
+tests/test_lifecycle.py::test_exec_background_process_does_not_hang_exec PASSED [ 90%]
+tests/test_lifecycle.py::test_exec_output_is_capped PASSED               [ 92%]
+tests/test_lifecycle.py::test_destroy_kills_background_processes PASSED  [ 94%]
+tests/test_lifecycle.py::test_pids_limit_contains_fork_bomb PASSED       [ 96%]
+tests/test_lifecycle.py::test_operations_on_unknown_sandbox_fail_cleanly PASSED [ 98%]
+tests/test_lifecycle.py::test_destroy_removes_nested_subvolumes PASSED   [100%]
+
+============================= 55 passed in 39.07s ==============================
+------------------------------------------------------------------------
+exit_code: 0

@@ -1,6 +1,6 @@
 # DESIGN.md
 
-Status: Phase 1 (single-sandbox lifecycle) is implemented. Later sections
+Status: Phases 1–3 are implemented (lifecycle, fork, containment controls). Phase 4 (adversarial testing) has not started. Later sections
 are still the spec that implementation (see [PLAN.md](PLAN.md)) is held to.
 Where implementation has resolved an open question, the text says so and
 links the code and test.
@@ -260,6 +260,11 @@ that attacking its own sandbox is a viable strategy. The design assumes:
   architecture eliminates by construction.
 - **btrfs-specific attack surface.** Filesystem ioctls (e.g. subvolume and inode-lookup operations) are reachable from a root process in the sandbox unless filtered. Planned mitigations (no path to the top-level volume, seccomp denial of btrfs ioctls) are unproven until Phase 4 tests them; anything they miss is a known limitation.
 - **Disk exhaustion.** cgroup limits do not bound disk space; without btrfs qgroups a sandbox can fill the shared volume.
+- **Phase 3 status: checked for existence, not attacked.** The controls in §5.2 and §5.4 are implemented ([docs/phases/phase3.md](docs/phases/phase3.md)). [tests/test_containment.py](tests/test_containment.py) only verifies that each one is present and behaves as configured. No adversarial (Phase 4) testing has been done, so nothing in this section is yet a claim of resistance to a root-inside attacker.
+- **seccomp is a deny-list** ([control_plane/seccomp.py](control_plane/seccomp.py)), weaker than an allow-list: any dangerous syscall missing from the list is reachable.
+- **The egress proxy's outbound sockets live in the host network namespace.** A compromised proxy runs as `nobody` with no capabilities, but it can still reach whatever the host netns can (loopback services, the host's LAN). The proxy's destination checks are its only barrier there.
+- **exec into a sandbox at its memory limit can have the command OOM-killed.** Until `execve`, the command process is a copy of the Python exec helper (about 10 MB RSS), charged to the sandbox's cgroup. The helper itself stays outside and always reports the result ([tests/test_fork.py](tests/test_fork.py) `test_fork_under_memory_pressure`).
+- **`io.max` is plumbed but untested,** so disk I/O limits are not claimed.
 - **Multi-host.** Single host only; no claims about isolation across a
   cluster of hosts.
 - **Resource-limit completeness.** cgroup v2 limits (§5.2) cover CPU,

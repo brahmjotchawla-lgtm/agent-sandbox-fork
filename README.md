@@ -3,12 +3,12 @@
 A sandbox server for AI agents that forks a running agent environment into
 N parallel copies, with containment enforced from outside the sandbox.
 
-**Status: Phase 1 of [PLAN.md](PLAN.md) is implemented** (single-sandbox
-create / exec / destroy, crash cleanup). Tests have run only on a WSL2 dev
-host ([results/phase1-tests/](results/phase1-tests/)), **not** on the target
-VM. This README still makes no performance or security claims. Per [CLAUDE.md](CLAUDE.md), any
-claim added here must link to the script that produced it, with raw output
-committed under [`results/`](results/).
+**Status: Phases 1–3 of [PLAN.md](PLAN.md) are implemented** (lifecycle,
+environment fork, containment controls). Everything has run only on a WSL2
+dev host, **not** the target VM. Containment has been checked for
+existence, not attacked: Phase 4 has not started. So this README makes no
+security claim. The first fork-vs-Docker measurements, including the
+results that go against the claim, are in [BENCHMARKS.md §4a](BENCHMARKS.md).
 
 ## Docs
 
