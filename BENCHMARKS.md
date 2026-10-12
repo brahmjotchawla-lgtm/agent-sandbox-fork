@@ -103,11 +103,55 @@ could be mistaken for a performance metric.
 - Location: `/bench` (scripts), `/results/<date>-<phase>/` (committed raw
   output — JSON lines, one record per trial, including timestamps, host
   spec, and the exact command invoked).
-- Not yet implemented — lands with Phase 2 (basic fork-vs-restart) and is
-  extended in Phase 3 (fan-out, containment-adjacent overhead) per
-  PLAN.md. This document will gain a "Results" section with links once
-  real numbers exist; until then, no numbers are stated anywhere in this
-  repo.
+- Implemented: [bench/fork_vs_restart.py](bench/fork_vs_restart.py), workload
+  [bench/workload/Dockerfile](bench/workload/Dockerfile), built and imported by
+  [bench/build_workload.sh](bench/build_workload.sh).
+
+## 4a. Results so far: WSL2 dev host only, NOT the target VM
+
+Command: `sudo sh bench/build_workload.sh && sudo python3 bench/fork_vs_restart.py --label wsl-dev-NOT-TARGET`
+(30 trials plus 3 warm-up rounds per scenario, shuffled round-robin). Raw per-trial data, host spec and a
+provenance note are in
+[results/phase2-bench/wsl-dev-NOT-TARGET/20261012T154223Z/](results/phase2-bench/wsl-dev-NOT-TARGET/20261012T154223Z/).
+Phase 2 conditions: no networking on either side (Docker `NetworkMode: none`), no seccomp on the fork side.
+Docker uses its default seccomp profile. The btrfs volume is a loopback file. These numbers say nothing
+about the target VM. They are here because rule 1 forbids estimates, not because they are the headline.
+
+"ready" = API call until `exec(true)` has returned. All values are in ms.
+
+| scenario | median | p95 | p99 |
+|---|---|---|---|
+| fork_idle (environment fork, parent idle) | 56.3 | 330.8 | 944.5 |
+| fork_busy (parent writing continuously) | 69.8 | 963.8 | 1175.9 |
+| create_fresh (snapshot of base image) | 65.1 | 792.0 | 1089.0 |
+| docker_run (warm image, Engine API) | 318.3 | 1486.0 | 1685.5 |
+| docker_commit_run (state-equivalent baseline) | 2298.1 | 4799.7 | 6218.3 |
+| cow_fork, ready + edit-and-commit workload | 151.1 (total) | | |
+| cow_docker_run, ready + same workload | 663.4 (total) | | |
+
+Fan-out, wall time until all N children are ready (median ms):
+
+| N | fork | docker_run |
+|---|---|---|
+| 1 | 187.0 | 445.7 |
+| 10 | 649.9 | 1052.6 |
+| 50 | 5824.0 | 4805.5 |
+| 100 | 11330.3 | 8991.0 |
+
+What these numbers show, including the parts that cut against Claim 1:
+
+1. **Single fork, median:** faster than a warm `docker run` on this host, and much faster than the
+   state-equivalent `docker commit` + run.
+2. **Tail latency is bad.** The parent-frozen window (median ~29 ms) has a p99 near 0.9–1.6 s. The time
+   is the btrfs snapshot ioctl, which commits a filesystem transaction. A forking parent can therefore be
+   frozen for over a second at the tail. This is unexplained beyond "transaction commit", and it is
+   not fixed.
+3. **Fan-out at N=50 and N=100: fork is slower than `docker run` on this host.** Forks from one parent
+   serialize on that parent (freeze + snapshot under a per-parent lock), and every snapshot commits a
+   transaction. Per §3.5 this is a materially weaker result than the claim this project set out to
+   prove. It is reported as-is. It is the first thing to investigate (batching N snapshots under one
+   freeze is the obvious candidate) and to re-measure on the target VM.
+
 
 ## 5. Explicitly not a benchmark
 

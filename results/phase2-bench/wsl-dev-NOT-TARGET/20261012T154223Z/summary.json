@@ -1,0 +1,1163 @@
+{
+ "note": "Computed from trials.jsonl by bench/fork_vs_restart.py:summarize(); warm-up rounds and errored trials excluded. p99 over 30 samples is close to the max and should be read as such.",
+ "errors": 0,
+ "summary": {
+  "cow_docker_commit": {
+   "commit_ms": {
+    "n": 30,
+    "min": 1691.695,
+    "median": 1764.151,
+    "p95": 1996.212,
+    "p99": 2390.457,
+    "max": 2543.944,
+    "mean": 1815.247
+   },
+   "api_ms": {
+    "n": 30,
+    "min": 2161.968,
+    "median": 2235.136,
+    "p95": 2647.002,
+    "p99": 4176.921,
+    "max": 4718.037,
+    "mean": 2347.282
+   },
+   "create_start_ms": {
+    "n": 30,
+    "min": 260.099,
+    "median": 472.908,
+    "p95": 559.181,
+    "p99": 2082.578,
+    "max": 2703.346,
+    "mean": 532.023
+   },
+   "ready_ms": {
+    "n": 30,
+    "min": 2212.95,
+    "median": 2291.705,
+    "p95": 2708.179,
+    "p99": 4233.369,
+    "max": 4771.507,
+    "mean": 2401.962
+   },
+   "writes_ms": {
+    "n": 30,
+    "min": 311.725,
+    "median": 325.828,
+    "p95": 358.635,
+    "p99": 706.306,
+    "max": 847.594,
+    "mean": 346.962
+   },
+   "ready_plus_writes_ms": {
+    "n": 30,
+    "min": 2536.435,
+    "median": 2621.846,
+    "p95": 3040.204,
+    "p99": 4929.58,
+    "max": 5619.101,
+    "mean": 2748.924
+   },
+   "destroy_wall_ms": {
+    "n": 30,
+    "min": 164.481,
+    "median": 200.07,
+    "p95": 213.476,
+    "p99": 2009.18,
+    "max": 2742.041,
+    "mean": 281.86
+   }
+  },
+  "docker_run": {
+   "api_ms": {
+    "n": 30,
+    "min": 235.132,
+    "median": 261.736,
+    "p95": 1420.225,
+    "p99": 1628.675,
+    "max": 1641.556,
+    "mean": 467.323
+   },
+   "create_start_ms": {
+    "n": 30,
+    "min": 235.131,
+    "median": 261.735,
+    "p95": 1420.224,
+    "p99": 1628.674,
+    "max": 1641.556,
+    "mean": 467.322
+   },
+   "ready_ms": {
+    "n": 30,
+    "min": 284.458,
+    "median": 318.318,
+    "p95": 1486.001,
+    "p99": 1685.517,
+    "max": 1695.047,
+    "mean": 525.002
+   },
+   "destroy_wall_ms": {
+    "n": 30,
+    "min": 117.82,
+    "median": 132.697,
+    "p95": 847.817,
+    "p99": 1344.412,
+    "max": 1521.96,
+    "mean": 243.205
+   }
+  },
+  "cow_docker_run": {
+   "api_ms": {
+    "n": 30,
+    "min": 230.32,
+    "median": 255.188,
+    "p95": 1591.383,
+    "p99": 1816.99,
+    "max": 1831.69,
+    "mean": 466.771
+   },
+   "create_start_ms": {
+    "n": 30,
+    "min": 230.319,
+    "median": 255.188,
+    "p95": 1591.382,
+    "p99": 1816.989,
+    "max": 1831.689,
+    "mean": 466.77
+   },
+   "ready_ms": {
+    "n": 30,
+    "min": 280.652,
+    "median": 310.257,
+    "p95": 1652.811,
+    "p99": 1874.914,
+    "max": 1887.854,
+    "mean": 521.292
+   },
+   "writes_ms": {
+    "n": 30,
+    "min": 332.296,
+    "median": 358.732,
+    "p95": 915.899,
+    "p99": 920.133,
+    "max": 920.439,
+    "mean": 499.116
+   },
+   "ready_plus_writes_ms": {
+    "n": 30,
+    "min": 624.849,
+    "median": 663.36,
+    "p95": 2522.215,
+    "p99": 2772.814,
+    "max": 2808.293,
+    "mean": 1020.408
+   },
+   "destroy_wall_ms": {
+    "n": 30,
+    "min": 159.752,
+    "median": 188.072,
+    "p95": 2038.658,
+    "p99": 4446.651,
+    "max": 5417.763,
+    "mean": 645.616
+   }
+  },
+  "docker_commit_run": {
+   "commit_ms": {
+    "n": 30,
+    "min": 1690.714,
+    "median": 1748.991,
+    "p95": 2476.044,
+    "p99": 4766.869,
+    "max": 5690.881,
+    "mean": 1950.603
+   },
+   "api_ms": {
+    "n": 30,
+    "min": 2149.915,
+    "median": 2246.637,
+    "p95": 4745.943,
+    "p99": 6156.892,
+    "max": 6698.508,
+    "mean": 2616.492
+   },
+   "create_start_ms": {
+    "n": 30,
+    "min": 438.778,
+    "median": 488.146,
+    "p95": 1905.161,
+    "p99": 2794.657,
+    "max": 2858.023,
+    "mean": 665.854
+   },
+   "ready_ms": {
+    "n": 30,
+    "min": 2199.104,
+    "median": 2298.109,
+    "p95": 4799.714,
+    "p99": 6218.323,
+    "max": 6763.52,
+    "mean": 2671.664
+   },
+   "destroy_wall_ms": {
+    "n": 30,
+    "min": 140.852,
+    "median": 151.72,
+    "p95": 735.681,
+    "p99": 821.682,
+    "max": 843.691,
+    "mean": 225.416
+   }
+  },
+  "cow_fork": {
+   "api_ms": {
+    "n": 30,
+    "min": 26.057,
+    "median": 47.115,
+    "p95": 1360.765,
+    "p99": 1658.067,
+    "max": 1693.43,
+    "mean": 264.084
+   },
+   "ready_ms": {
+    "n": 30,
+    "min": 34.843,
+    "median": 56.63,
+    "p95": 1370.891,
+    "p99": 1667.503,
+    "max": 1702.483,
+    "mean": 274.913
+   },
+   "writes_ms": {
+    "n": 30,
+    "min": 85.937,
+    "median": 91.344,
+    "p95": 120.08,
+    "p99": 156.878,
+    "max": 168.723,
+    "mean": 96.165
+   },
+   "ready_plus_writes_ms": {
+    "n": 30,
+    "min": 122.25,
+    "median": 151.131,
+    "p95": 1460.968,
+    "p99": 1761.756,
+    "max": 1799.312,
+    "mean": 371.078
+   },
+   "destroy_ms": {
+    "n": 30,
+    "min": 8.499,
+    "median": 9.853,
+    "p95": 18.731,
+    "p99": 27.319,
+    "max": 30.424,
+    "mean": 11.779
+   },
+   "destroy_wall_ms": {
+    "n": 30,
+    "min": 8.807,
+    "median": 10.229,
+    "p95": 19.112,
+    "p99": 27.693,
+    "max": 30.797,
+    "mean": 12.19
+   },
+   "server.freeze_ms": {
+    "n": 30,
+    "min": 0.109,
+    "median": 0.139,
+    "p95": 0.233,
+    "p99": 0.772,
+    "max": 0.987,
+    "mean": 0.176
+   },
+   "server.snapshot_ms": {
+    "n": 30,
+    "min": 6.717,
+    "median": 28.181,
+    "p95": 1326.534,
+    "p99": 1622.029,
+    "max": 1657.071,
+    "mean": 239.651
+   },
+   "server.thaw_ms": {
+    "n": 30,
+    "min": 0.101,
+    "median": 0.154,
+    "p95": 0.225,
+    "p99": 0.333,
+    "max": 0.37,
+    "mean": 0.161
+   },
+   "server.parent_frozen_window_ms": {
+    "n": 30,
+    "min": 6.964,
+    "median": 28.481,
+    "p95": 1326.873,
+    "p99": 1622.396,
+    "max": 1657.462,
+    "mean": 239.988
+   },
+   "server.cgroup_ms": {
+    "n": 30,
+    "min": 0.262,
+    "median": 0.395,
+    "p95": 0.788,
+    "p99": 1.173,
+    "max": 1.329,
+    "mean": 0.461
+   },
+   "server.launch_ms": {
+    "n": 30,
+    "min": 10.002,
+    "median": 11.872,
+    "p95": 21.824,
+    "p99": 32.805,
+    "max": 36.659,
+    "mean": 13.185
+   },
+   "server.launch_breakdown_ms.zygote_fork_to_launcher": {
+    "n": 30,
+    "min": 1.677,
+    "median": 1.91,
+    "p95": 2.409,
+    "p99": 10.964,
+    "max": 14.41,
+    "mean": 2.364
+   },
+   "server.launch_breakdown_ms.launcher_private_mntns": {
+    "n": 30,
+    "min": 0.624,
+    "median": 0.824,
+    "p95": 1.763,
+    "p99": 3.155,
+    "max": 3.629,
+    "mean": 0.963
+   },
+   "server.launch_breakdown_ms.fork_c1": {
+    "n": 30,
+    "min": 0.934,
+    "median": 1.077,
+    "p95": 1.692,
+    "p99": 1.812,
+    "max": 1.845,
+    "mean": 1.153
+   },
+   "server.launch_breakdown_ms.unshare_userns": {
+    "n": 30,
+    "min": 0.049,
+    "median": 0.14,
+    "p95": 0.465,
+    "p99": 1.873,
+    "max": 2.437,
+    "mean": 0.226
+   },
+   "server.launch_breakdown_ms.userns_handoff": {
+    "n": 30,
+    "min": 0.073,
+    "median": 0.085,
+    "p95": 0.105,
+    "p99": 0.284,
+    "max": 0.357,
+    "mean": 0.095
+   },
+   "server.launch_breakdown_ms.idmap_write": {
+    "n": 30,
+    "min": 0.336,
+    "median": 0.383,
+    "p95": 0.588,
+    "p99": 1.34,
+    "max": 1.645,
+    "mean": 0.458
+   },
+   "server.launch_breakdown_ms.idmapped_rootfs_mount": {
+    "n": 30,
+    "min": 0.244,
+    "median": 0.296,
+    "p95": 0.604,
+    "p99": 1.018,
+    "max": 1.181,
+    "mean": 0.366
+   },
+   "server.launch_breakdown_ms.namespaces_create": {
+    "n": 30,
+    "min": 1.031,
+    "median": 1.679,
+    "p95": 5.968,
+    "p99": 8.456,
+    "max": 9.05,
+    "mean": 2.305
+   },
+   "server.launch_breakdown_ms.pivot_mounts_exec_init": {
+    "n": 30,
+    "min": 3.09,
+    "median": 3.632,
+    "p95": 5.722,
+    "p99": 6.488,
+    "max": 6.631,
+    "mean": 3.94
+   },
+   "server.total_ms": {
+    "n": 30,
+    "min": 25.652,
+    "median": 46.643,
+    "p95": 1360.301,
+    "p99": 1657.412,
+    "max": 1692.695,
+    "mean": 263.233
+   }
+  },
+  "fork_idle": {
+   "api_ms": {
+    "n": 30,
+    "min": 23.596,
+    "median": 47.206,
+    "p95": 316.913,
+    "p99": 933.54,
+    "max": 1107.461,
+    "mean": 97.54
+   },
+   "ready_ms": {
+    "n": 30,
+    "min": 32.757,
+    "median": 56.31,
+    "p95": 330.752,
+    "p99": 944.45,
+    "max": 1117.41,
+    "mean": 107.117
+   },
+   "destroy_ms": {
+    "n": 30,
+    "min": 3.515,
+    "median": 4.559,
+    "p95": 9.018,
+    "p99": 11.989,
+    "max": 12.33,
+    "mean": 5.034
+   },
+   "destroy_wall_ms": {
+    "n": 30,
+    "min": 3.839,
+    "median": 4.858,
+    "p95": 9.396,
+    "p99": 12.375,
+    "max": 12.704,
+    "mean": 5.363
+   },
+   "server.freeze_ms": {
+    "n": 30,
+    "min": 0.099,
+    "median": 0.123,
+    "p95": 0.207,
+    "p99": 0.303,
+    "max": 0.337,
+    "mean": 0.136
+   },
+   "server.snapshot_ms": {
+    "n": 30,
+    "min": 5.13,
+    "median": 28.982,
+    "p95": 284.069,
+    "p99": 894.798,
+    "max": 1068.65,
+    "mean": 76.381
+   },
+   "server.thaw_ms": {
+    "n": 30,
+    "min": 0.102,
+    "median": 0.159,
+    "p95": 0.206,
+    "p99": 0.224,
+    "max": 0.231,
+    "mean": 0.16
+   },
+   "server.parent_frozen_window_ms": {
+    "n": 30,
+    "min": 5.365,
+    "median": 29.282,
+    "p95": 284.411,
+    "p99": 895.162,
+    "max": 1069.033,
+    "mean": 76.676
+   },
+   "server.cgroup_ms": {
+    "n": 30,
+    "min": 0.263,
+    "median": 0.442,
+    "p95": 1.187,
+    "p99": 1.757,
+    "max": 1.934,
+    "mean": 0.537
+   },
+   "server.launch_ms": {
+    "n": 30,
+    "min": 10.144,
+    "median": 11.678,
+    "p95": 18.924,
+    "p99": 24.032,
+    "max": 25.989,
+    "mean": 12.866
+   },
+   "server.launch_breakdown_ms.zygote_fork_to_launcher": {
+    "n": 30,
+    "min": 1.609,
+    "median": 1.835,
+    "p95": 4.191,
+    "p99": 5.221,
+    "max": 5.27,
+    "mean": 2.197
+   },
+   "server.launch_breakdown_ms.launcher_private_mntns": {
+    "n": 30,
+    "min": 0.617,
+    "median": 0.706,
+    "p95": 1.347,
+    "p99": 1.683,
+    "max": 1.794,
+    "mean": 0.812
+   },
+   "server.launch_breakdown_ms.fork_c1": {
+    "n": 30,
+    "min": 0.883,
+    "median": 1.071,
+    "p95": 1.66,
+    "p99": 1.786,
+    "max": 1.793,
+    "mean": 1.136
+   },
+   "server.launch_breakdown_ms.unshare_userns": {
+    "n": 30,
+    "min": 0.049,
+    "median": 0.151,
+    "p95": 0.498,
+    "p99": 0.685,
+    "max": 0.736,
+    "mean": 0.2
+   },
+   "server.launch_breakdown_ms.userns_handoff": {
+    "n": 30,
+    "min": 0.072,
+    "median": 0.086,
+    "p95": 0.122,
+    "p99": 0.131,
+    "max": 0.131,
+    "mean": 0.092
+   },
+   "server.launch_breakdown_ms.idmap_write": {
+    "n": 30,
+    "min": 0.333,
+    "median": 0.363,
+    "p95": 0.731,
+    "p99": 0.894,
+    "max": 0.905,
+    "mean": 0.417
+   },
+   "server.launch_breakdown_ms.idmapped_rootfs_mount": {
+    "n": 30,
+    "min": 0.253,
+    "median": 0.275,
+    "p95": 0.444,
+    "p99": 0.51,
+    "max": 0.513,
+    "mean": 0.303
+   },
+   "server.launch_breakdown_ms.namespaces_create": {
+    "n": 30,
+    "min": 1.222,
+    "median": 1.93,
+    "p95": 5.349,
+    "p99": 7.092,
+    "max": 7.624,
+    "mean": 2.496
+   },
+   "server.launch_breakdown_ms.pivot_mounts_exec_init": {
+    "n": 30,
+    "min": 3.072,
+    "median": 3.592,
+    "p95": 5.615,
+    "p99": 5.97,
+    "max": 6.016,
+    "mean": 3.865
+   },
+   "server.total_ms": {
+    "n": 30,
+    "min": 23.193,
+    "median": 46.84,
+    "p95": 316.152,
+    "p99": 933.051,
+    "max": 1106.949,
+    "mean": 97.095
+   }
+  },
+  "create_fresh": {
+   "api_ms": {
+    "n": 30,
+    "min": 22.486,
+    "median": 52.178,
+    "p95": 780.924,
+    "p99": 1075.982,
+    "max": 1142.823,
+    "mean": 175.673
+   },
+   "ready_ms": {
+    "n": 30,
+    "min": 30.791,
+    "median": 65.069,
+    "p95": 792.022,
+    "p99": 1089.011,
+    "max": 1156.635,
+    "mean": 185.682
+   },
+   "destroy_ms": {
+    "n": 30,
+    "min": 3.452,
+    "median": 4.613,
+    "p95": 14.174,
+    "p99": 17.297,
+    "max": 18.509,
+    "mean": 6.398
+   },
+   "destroy_wall_ms": {
+    "n": 30,
+    "min": 3.865,
+    "median": 4.916,
+    "p95": 14.496,
+    "p99": 17.649,
+    "max": 18.886,
+    "mean": 6.723
+   },
+   "server.snapshot_ms": {
+    "n": 30,
+    "min": 5.451,
+    "median": 32.442,
+    "p95": 745.35,
+    "p99": 1042.039,
+    "max": 1109.228,
+    "mean": 152.436
+   },
+   "server.cgroup_ms": {
+    "n": 30,
+    "min": 0.296,
+    "median": 0.445,
+    "p95": 0.794,
+    "p99": 1.311,
+    "max": 1.488,
+    "mean": 0.487
+   },
+   "server.launch_ms": {
+    "n": 30,
+    "min": 9.837,
+    "median": 11.662,
+    "p95": 19.819,
+    "p99": 23.04,
+    "max": 24.322,
+    "mean": 12.733
+   },
+   "server.launch_breakdown_ms.zygote_fork_to_launcher": {
+    "n": 30,
+    "min": 1.622,
+    "median": 1.966,
+    "p95": 2.458,
+    "p99": 3.056,
+    "max": 3.289,
+    "mean": 2.023
+   },
+   "server.launch_breakdown_ms.launcher_private_mntns": {
+    "n": 30,
+    "min": 0.599,
+    "median": 0.755,
+    "p95": 1.575,
+    "p99": 1.906,
+    "max": 1.97,
+    "mean": 0.853
+   },
+   "server.launch_breakdown_ms.fork_c1": {
+    "n": 30,
+    "min": 0.912,
+    "median": 1.067,
+    "p95": 1.521,
+    "p99": 1.779,
+    "max": 1.842,
+    "mean": 1.136
+   },
+   "server.launch_breakdown_ms.unshare_userns": {
+    "n": 30,
+    "min": 0.046,
+    "median": 0.154,
+    "p95": 0.414,
+    "p99": 0.561,
+    "max": 0.58,
+    "mean": 0.172
+   },
+   "server.launch_breakdown_ms.userns_handoff": {
+    "n": 30,
+    "min": 0.075,
+    "median": 0.087,
+    "p95": 0.12,
+    "p99": 0.273,
+    "max": 0.334,
+    "mean": 0.098
+   },
+   "server.launch_breakdown_ms.idmap_write": {
+    "n": 30,
+    "min": 0.324,
+    "median": 0.384,
+    "p95": 0.544,
+    "p99": 0.804,
+    "max": 0.898,
+    "mean": 0.416
+   },
+   "server.launch_breakdown_ms.idmapped_rootfs_mount": {
+    "n": 30,
+    "min": 0.252,
+    "median": 0.291,
+    "p95": 0.707,
+    "p99": 0.859,
+    "max": 0.915,
+    "mean": 0.357
+   },
+   "server.launch_breakdown_ms.namespaces_create": {
+    "n": 30,
+    "min": 1.13,
+    "median": 1.831,
+    "p95": 5.615,
+    "p99": 8.842,
+    "max": 9.665,
+    "mean": 2.4
+   },
+   "server.launch_breakdown_ms.pivot_mounts_exec_init": {
+    "n": 30,
+    "min": 3.163,
+    "median": 3.678,
+    "p95": 5.607,
+    "p99": 6.287,
+    "max": 6.472,
+    "mean": 3.859
+   },
+   "server.total_ms": {
+    "n": 30,
+    "min": 22.127,
+    "median": 51.59,
+    "p95": 780.391,
+    "p99": 1075.475,
+    "max": 1142.309,
+    "mean": 175.206
+   }
+  },
+  "fork_busy": {
+   "api_ms": {
+    "n": 30,
+    "min": 39.061,
+    "median": 59.378,
+    "p95": 951.021,
+    "p99": 1163.567,
+    "max": 1223.212,
+    "mean": 175.522
+   },
+   "ready_ms": {
+    "n": 30,
+    "min": 48.573,
+    "median": 69.772,
+    "p95": 963.8,
+    "p99": 1175.904,
+    "max": 1234.327,
+    "mean": 185.506
+   },
+   "destroy_ms": {
+    "n": 30,
+    "min": 3.349,
+    "median": 4.377,
+    "p95": 21.545,
+    "p99": 32.128,
+    "max": 33.136,
+    "mean": 6.999
+   },
+   "destroy_wall_ms": {
+    "n": 30,
+    "min": 3.622,
+    "median": 4.677,
+    "p95": 21.888,
+    "p99": 32.479,
+    "max": 33.471,
+    "mean": 7.32
+   },
+   "server.freeze_ms": {
+    "n": 30,
+    "min": 0.125,
+    "median": 0.183,
+    "p95": 5.213,
+    "p99": 13.527,
+    "max": 16.588,
+    "mean": 1.171
+   },
+   "server.snapshot_ms": {
+    "n": 30,
+    "min": 19.462,
+    "median": 34.198,
+    "p95": 900.16,
+    "p99": 1120.613,
+    "max": 1189.934,
+    "mean": 151.797
+   },
+   "server.thaw_ms": {
+    "n": 30,
+    "min": 0.172,
+    "median": 0.202,
+    "p95": 0.253,
+    "p99": 0.341,
+    "max": 0.375,
+    "mean": 0.214
+   },
+   "server.parent_frozen_window_ms": {
+    "n": 30,
+    "min": 20.015,
+    "median": 35.159,
+    "p95": 900.542,
+    "p99": 1121.032,
+    "max": 1190.374,
+    "mean": 153.182
+   },
+   "server.cgroup_ms": {
+    "n": 30,
+    "min": 0.27,
+    "median": 0.396,
+    "p95": 0.814,
+    "p99": 0.901,
+    "max": 0.917,
+    "mean": 0.471
+   },
+   "server.launch_ms": {
+    "n": 30,
+    "min": 10.176,
+    "median": 11.325,
+    "p95": 24.159,
+    "p99": 30.027,
+    "max": 31.611,
+    "mean": 13.011
+   },
+   "server.launch_breakdown_ms.zygote_fork_to_launcher": {
+    "n": 30,
+    "min": 1.603,
+    "median": 1.903,
+    "p95": 3.06,
+    "p99": 3.426,
+    "max": 3.515,
+    "mean": 2.053
+   },
+   "server.launch_breakdown_ms.launcher_private_mntns": {
+    "n": 30,
+    "min": 0.623,
+    "median": 0.711,
+    "p95": 1.352,
+    "p99": 1.592,
+    "max": 1.644,
+    "mean": 0.82
+   },
+   "server.launch_breakdown_ms.fork_c1": {
+    "n": 30,
+    "min": 0.919,
+    "median": 1.039,
+    "p95": 1.57,
+    "p99": 2.269,
+    "max": 2.444,
+    "mean": 1.129
+   },
+   "server.launch_breakdown_ms.unshare_userns": {
+    "n": 30,
+    "min": 0.048,
+    "median": 0.148,
+    "p95": 0.463,
+    "p99": 0.509,
+    "max": 0.526,
+    "mean": 0.183
+   },
+   "server.launch_breakdown_ms.userns_handoff": {
+    "n": 30,
+    "min": 0.073,
+    "median": 0.087,
+    "p95": 0.128,
+    "p99": 0.142,
+    "max": 0.146,
+    "mean": 0.092
+   },
+   "server.launch_breakdown_ms.idmap_write": {
+    "n": 30,
+    "min": 0.339,
+    "median": 0.376,
+    "p95": 0.666,
+    "p99": 0.702,
+    "max": 0.708,
+    "mean": 0.423
+   },
+   "server.launch_breakdown_ms.idmapped_rootfs_mount": {
+    "n": 30,
+    "min": 0.253,
+    "median": 0.296,
+    "p95": 0.449,
+    "p99": 0.484,
+    "max": 0.497,
+    "mean": 0.323
+   },
+   "server.launch_breakdown_ms.namespaces_create": {
+    "n": 30,
+    "min": 1.152,
+    "median": 1.744,
+    "p95": 6.095,
+    "p99": 15.336,
+    "max": 19.062,
+    "mean": 2.638
+   },
+   "server.launch_breakdown_ms.pivot_mounts_exec_init": {
+    "n": 30,
+    "min": 3.16,
+    "median": 3.577,
+    "p95": 5.897,
+    "p99": 8.741,
+    "max": 9.575,
+    "mean": 3.973
+   },
+   "server.total_ms": {
+    "n": 30,
+    "min": 38.718,
+    "median": 58.993,
+    "p95": 950.512,
+    "p99": 1163.078,
+    "max": 1222.746,
+    "mean": 175.046
+   }
+  },
+  "fanout_docker_1": {
+   "all_ready_ms": {
+    "n": 30,
+    "min": 283.835,
+    "median": 445.702,
+    "p95": 716.599,
+    "p99": 1044.19,
+    "max": 1161.155,
+    "mean": 465.565
+   },
+   "first_ready_ms": {
+    "n": 30,
+    "min": 283.835,
+    "median": 445.702,
+    "p95": 716.599,
+    "p99": 1044.19,
+    "max": 1161.155,
+    "mean": 465.565
+   },
+   "median_child_ready_ms": {
+    "n": 30,
+    "min": 283.835,
+    "median": 445.702,
+    "p95": 716.599,
+    "p99": 1044.19,
+    "max": 1161.155,
+    "mean": 465.565
+   }
+  },
+  "fanout_fork_1": {
+   "all_ready_ms": {
+    "n": 30,
+    "min": 32.511,
+    "median": 187.017,
+    "p95": 761.552,
+    "p99": 9473.328,
+    "max": 12909.458,
+    "mean": 636.694
+   },
+   "first_ready_ms": {
+    "n": 30,
+    "min": 32.511,
+    "median": 187.017,
+    "p95": 761.552,
+    "p99": 9473.328,
+    "max": 12909.458,
+    "mean": 636.694
+   },
+   "median_child_ready_ms": {
+    "n": 30,
+    "min": 32.511,
+    "median": 187.017,
+    "p95": 761.552,
+    "p99": 9473.328,
+    "max": 12909.458,
+    "mean": 636.694
+   }
+  },
+  "fanout_docker_10": {
+   "all_ready_ms": {
+    "n": 30,
+    "min": 758.66,
+    "median": 1052.58,
+    "p95": 1480.579,
+    "p99": 4255.598,
+    "max": 5378.501,
+    "mean": 1223.102
+   },
+   "first_ready_ms": {
+    "n": 30,
+    "min": 684.973,
+    "median": 970.109,
+    "p95": 1320.163,
+    "p99": 4145.473,
+    "max": 5292.895,
+    "mean": 1131.073
+   },
+   "median_child_ready_ms": {
+    "n": 30,
+    "min": 741.765,
+    "median": 1023.035,
+    "p95": 1438.089,
+    "p99": 4209.17,
+    "max": 5338.176,
+    "mean": 1199.997
+   }
+  },
+  "fanout_fork_10": {
+   "all_ready_ms": {
+    "n": 30,
+    "min": 390.544,
+    "median": 649.862,
+    "p95": 2145.883,
+    "p99": 3164.649,
+    "max": 3412.009,
+    "mean": 885.607
+   },
+   "first_ready_ms": {
+    "n": 30,
+    "min": 120.153,
+    "median": 295.064,
+    "p95": 532.733,
+    "p99": 677.88,
+    "max": 734.991,
+    "mean": 317.197
+   },
+   "median_child_ready_ms": {
+    "n": 30,
+    "min": 330.912,
+    "median": 507.649,
+    "p95": 1476.16,
+    "p99": 1524.468,
+    "max": 1534.284,
+    "mean": 639.879
+   }
+  },
+  "fanout_docker_50": {
+   "all_ready_ms": {
+    "n": 30,
+    "min": 2687.023,
+    "median": 4805.462,
+    "p95": 6847.823,
+    "p99": 7172.049,
+    "max": 7203.994,
+    "mean": 4801.882
+   },
+   "first_ready_ms": {
+    "n": 30,
+    "min": 1841.875,
+    "median": 3869.928,
+    "p95": 5920.588,
+    "p99": 6326.496,
+    "max": 6336.241,
+    "mean": 3933.649
+   },
+   "median_child_ready_ms": {
+    "n": 30,
+    "min": 2469.475,
+    "median": 4511.383,
+    "p95": 6559.656,
+    "p99": 6929.228,
+    "max": 6948.631,
+    "mean": 4532.5
+   }
+  },
+  "fanout_fork_50": {
+   "all_ready_ms": {
+    "n": 30,
+    "min": 3208.147,
+    "median": 5824.019,
+    "p95": 9680.063,
+    "p99": 10221.946,
+    "max": 10254.851,
+    "mean": 6158.65
+   },
+   "first_ready_ms": {
+    "n": 30,
+    "min": 349.466,
+    "median": 732.037,
+    "p95": 1097.559,
+    "p99": 1177.634,
+    "max": 1180.061,
+    "mean": 708.195
+   },
+   "median_child_ready_ms": {
+    "n": 30,
+    "min": 1594.182,
+    "median": 3592.376,
+    "p95": 6459.525,
+    "p99": 6752.027,
+    "max": 6823.692,
+    "mean": 3788.298
+   }
+  },
+  "fanout_docker_100": {
+   "all_ready_ms": {
+    "n": 30,
+    "min": 4556.095,
+    "median": 8990.993,
+    "p95": 14479.24,
+    "p99": 15301.401,
+    "max": 15593.081,
+    "mean": 9155.059
+   },
+   "first_ready_ms": {
+    "n": 30,
+    "min": 2217.799,
+    "median": 6774.452,
+    "p95": 10877.424,
+    "p99": 11860.042,
+    "max": 11880.859,
+    "mean": 6402.768
+   },
+   "median_child_ready_ms": {
+    "n": 30,
+    "min": 4199.349,
+    "median": 8505.812,
+    "p95": 13670.164,
+    "p99": 13805.042,
+    "max": 13829.211,
+    "mean": 8395.13
+   }
+  },
+  "fanout_fork_100": {
+   "all_ready_ms": {
+    "n": 30,
+    "min": 2960.017,
+    "median": 11330.301,
+    "p95": 17324.756,
+    "p99": 18725.312,
+    "max": 18784.997,
+    "mean": 10839.735
+   },
+   "first_ready_ms": {
+    "n": 30,
+    "min": 495.52,
+    "median": 1136.517,
+    "p95": 2041.448,
+    "p99": 2858.357,
+    "max": 3186.164,
+    "mean": 1256.192
+   },
+   "median_child_ready_ms": {
+    "n": 30,
+    "min": 2010.903,
+    "median": 5808.84,
+    "p95": 10751.962,
+    "p99": 12107.198,
+    "max": 12436.708,
+    "mean": 6136.213
+   }
+  }
+ }
+}

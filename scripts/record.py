@@ -24,6 +24,18 @@ def sh(*cmd):
         return "n/a"
 
 
+def git(*args):
+    # safe.directory: run as root on a checkout owned by another user (e.g. WSL /mnt/c),
+    # git otherwise refuses and prints nothing, which would silently look "clean".
+    p = subprocess.run(["git", "-c", "safe.directory=*", *args], capture_output=True, text=True, cwd=REPO)
+    return p.stdout.strip() if p.returncode == 0 else None
+
+
+def git_dirty():
+    out = git("status", "--porcelain")
+    return "UNKNOWN (git failed)" if out is None else bool(out)
+
+
 def provenance() -> list[str]:
     cpu = "n/a"
     try:
@@ -51,8 +63,8 @@ def provenance() -> list[str]:
         f"virt: {sh('systemd-detect-virt') or 'n/a'}",
         f"wsl: {'microsoft' in platform.release().lower()}",
         f"python: {platform.python_version()}",
-        f"git_commit: {sh('git', 'rev-parse', 'HEAD')}",
-        f"git_dirty: {bool(sh('git', 'status', '--porcelain'))}",
+        f"git_commit: {git('rev-parse', 'HEAD') or 'UNKNOWN (git failed)'}",
+        f"git_dirty: {git_dirty()}",
     ]
 
 
