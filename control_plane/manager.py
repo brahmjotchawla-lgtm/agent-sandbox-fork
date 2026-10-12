@@ -103,6 +103,7 @@ class SandboxManager:
             os.makedirs(d, mode=0o700, exist_ok=True)
             os.chmod(d, 0o700)
         self.volume_info = btrfs.ensure_volume(self.cfg.volume, self.cfg.image_path, self.cfg.btrfs_device, self.cfg.btrfs_size_gb)
+        self.volume_info["devno"] = btrfs.backing_devno(self.cfg.volume)
         self.cg.ensure()
         init_path = self._build_init()
         self._start_zygote(init_path)
@@ -286,12 +287,14 @@ class SandboxManager:
 
     # ------------------------------------------------------------- lifecycle
 
-    def create_environment(self, image: str, limits: dict | None = None, fault: dict | None = None) -> dict:
+    def create_environment(self, image: str, limits: dict | None = None, fault: dict | None = None,
+                           egress_allow: list[str] | None = None) -> dict:
         t0 = time.monotonic_ns()
         src = self.image_subvol(image)
         if not btrfs.is_subvolume(src):
             raise SandboxError(f"no such image {image!r}")
-        rec = self._new_record("create", image=image, limits={**self.cfg.default_limits, **(limits or {})})
+        rec = self._new_record("create", image=image, limits={**self._base_limits(), **(limits or {})},
+                               egress_allow=egress_allow if egress_allow is not None else list(self.cfg.egress_allowlist))
         sid = rec["id"]
         timings = {}
         try:
@@ -307,12 +310,14 @@ class SandboxManager:
         rec["timings"] = timings
         return {"id": sid, "timings": timings}
 
-    def fork(self, parent_id: str, limits: dict | None = None, fault: dict | None = None) -> dict:
+    def fork(self, parent_id: str, limits: dict | None = None, fault: dict | None = None,
+             egress_allow: list[str] | None = None) -> dict:
         """Environment fork (NOT process-memory fork). See module docstring."""
         t0 = time.monotonic_ns()
         parent = self._get(parent_id)
         rec = self._new_record("fork", parent=parent_id, image=parent.get("image"),
-                               limits={**parent["limits"], **(limits or {})}, forking_parent=parent_id)
+                               limits={**parent["limits"], **(limits or {})}, forking_parent=parent_id,
+                               egress_allow=egress_allow if egress_allow is not None else parent.get("egress_allow", []))
         sid = rec["id"]
         timings = {}
         try:
@@ -341,6 +346,13 @@ class SandboxManager:
         timings["total_ms"] = _ms(t0, time.monotonic_ns())
         rec["timings"] = timings
         return {"id": sid, "timings": timings}
+
+    def _base_limits(self) -> dict:
+        limits = dict(self.cfg.default_limits)
+        dev = self.volume_info.get("devno")
+        if self.cfg.io_limits and dev:
+            limits["io_max"] = f"{dev} " + " ".join(f"{k}={v}" for k, v in self.cfg.io_limits.items())
+        return limits
 
     def _maybe_fault(self, fault, point):
         if fault and self.cfg.allow_faults and fault.get("point") == point:
@@ -423,7 +435,7 @@ class SandboxManager:
         rec["netns_inode"] = os.stat(f"/proc/{init_pid}/ns/net").st_ino
         if self.network:
             t = time.monotonic_ns()
-            rec["net"] = self.network.attach(sid, rec["slot"], init_pid)
+            rec["net"] = self.network.attach(sid, rec["slot"], init_pid, rec.get("egress_allow"))
             timings["network_ms"] = _ms(t, time.monotonic_ns())
         rec["state"] = "running"
         self._save(rec)
@@ -624,7 +636,7 @@ class SandboxManager:
 
     def snapshot_info(self, sid: str) -> dict:
         rec = self._get(sid)
-        keys = ("id", "kind", "image", "parent", "created_at", "slot", "uid_base", "init_pid", "limits", "timings", "net")
+        keys = ("id", "kind", "image", "parent", "created_at", "slot", "uid_base", "init_pid", "limits", "timings", "net", "egress_allow")
         info = {k: rec.get(k) for k in keys}
         info["subvolume"] = self.subvol(sid)
         info["cgroup_stat"] = self.cg.stat(sid)

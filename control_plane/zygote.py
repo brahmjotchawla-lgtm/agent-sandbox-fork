@@ -34,6 +34,7 @@ import sys
 import time
 
 from . import _sys
+from . import seccomp as _seccomp
 
 MSG_MAX = 1 << 16
 DEVICES = ("null", "zero", "full", "random", "urandom", "tty")
@@ -252,6 +253,9 @@ def _child_c2(spec, root, init_fd, exec_w) -> None:
         socket.sethostname(spec["hostname"])
 
         _sys.close_fds_except([init_fd, exec_w])
+        if spec.get("seccomp"):
+            _sys.prctl(_sys.PR_SET_NO_NEW_PRIVS, 1)
+            _seccomp.install(spec["seccomp"])
         os.execve(init_fd, ["sandbox-init"], {})
     except BaseException as e:  # noqa: BLE001
         try:
@@ -342,6 +346,9 @@ def do_exec(spec: dict, fds: list[int]) -> int:
             os.chdir(spec.get("cwd") or "/")
             os.setsid()
             _sys.prctl(_sys.PR_SET_PDEATHSIG, signal.SIGKILL)  # after the uid change, which clears it
+            if spec.get("seccomp"):
+                _sys.prctl(_sys.PR_SET_NO_NEW_PRIVS, 1)
+                _seccomp.install(spec["seccomp"])
             os.execvpe(cmd[0], cmd, env)
         except OSError as e:
             os.write(2, f"sandboxd: cannot exec {cmd[0]!r}: {e.strerror}\n".encode())

@@ -42,8 +42,8 @@ class Server:
         m = self.m
         return {
             "ping": lambda: "pong",
-            "create_environment": lambda base_image, limits=None, fault=None: m.create_environment(base_image, limits, fault),
-            "fork": lambda sandbox_id, limits=None, fault=None: m.fork(sandbox_id, limits, fault),
+            "create_environment": lambda base_image, limits=None, fault=None, egress_allow=None: m.create_environment(base_image, limits, fault, egress_allow),
+            "fork": lambda sandbox_id, limits=None, fault=None, egress_allow=None: m.fork(sandbox_id, limits, fault, egress_allow),
             "exec": self._exec,
             "snapshot_info": lambda sandbox_id: m.snapshot_info(sandbox_id),
             "destroy": lambda sandbox_id: m.destroy(sandbox_id),

@@ -191,3 +191,16 @@ def ensure_volume(mountpoint: str, image: str | None, device: str | None, size_g
             os.mkdir(p, 0o700)
     src = subprocess.run(["findmnt", "-n", "-o", "SOURCE,OPTIONS", "--target", mountpoint], capture_output=True, text=True).stdout.strip()
     return {"mountpoint": mountpoint, "backing": "block-device" if device else "loopback-file", "device": device, "image": image if not device else None, "findmnt": src}
+
+
+def backing_devno(mountpoint: str) -> str | None:
+    """major:minor of the block device behind the btrfs mount (the loop device, for a loopback file).
+
+    cgroup io.max is keyed by this device.
+    """
+    src = subprocess.run(["findmnt", "-n", "-o", "SOURCE", "--target", mountpoint], capture_output=True, text=True).stdout.strip()
+    src = src.split("[", 1)[0]
+    if not src.startswith("/dev/"):
+        return None
+    st = os.stat(src)
+    return f"{os.major(st.st_rdev)}:{os.minor(st.st_rdev)}"

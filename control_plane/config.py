@@ -35,7 +35,14 @@ class Config:
     # Phase 3 settings (network + seccomp) live in the same file.
     network: bool = False
     seccomp: bool = False
+    # Default per-sandbox egress allowlist ("host:port", "*.suffix:port", or "ip:port").
+    # Empty = no egress at all. create/fork can override per sandbox.
     egress_allowlist: list = dataclasses.field(default_factory=list)
+    egress_netns: str = "sandboxd-egress"
+    egress_subnet: str = "10.200.0.0/16"
+    proxy_port: int = 3128
+    # Optional io.max limits need the btrfs backing device's major:minor; filled in at start-up.
+    io_limits: dict = dataclasses.field(default_factory=dict)  # e.g. {"rbps": 50<<20, "wbps": 50<<20}
 
     @property
     def volume(self) -> str:
