@@ -299,15 +299,20 @@ def do_exec(spec: dict, fds: list[int]) -> int:
     os.dup2(stdin_fd, 0)
     os.dup2(stdout_fd, 1)
     os.dup2(stderr_fd, 2)
-    # Join the sandbox's cgroup first, while we are still plain host root.
-    with open(os.path.join(spec["cgroup"], "cgroup.procs"), "w") as fh:
-        fh.write(str(os.getpid()))
+    # The helper itself stays OUT of the sandbox cgroup. If it joined, a sandbox
+    # sitting at memory.max would get it OOM-killed (it is the largest process
+    # there) and exec would fail exactly when someone needs to look inside.
+    # It opens the sandbox's cgroup.procs now, as host root. Since Linux 5.16
+    # cgroup migration permission is checked against the credentials and
+    # cgroup namespace of the *opener*, so this fd still works after setns()
+    # has turned us into sandbox root. Only the forked command gets moved in.
+    procs_fd = os.open(os.path.join(spec["cgroup"], "cgroup.procs"), os.O_WRONLY | os.O_CLOEXEC)
     # Non-dumpable: sandboxed root must not be able to ptrace or read /proc/<pid>/mem
     # of this process during the window where it is inside the sandbox's
     # namespaces but still a host-side helper. (It also is not in the sandbox's
     # PID namespace, so it is not visible there at all.)
     _sys.prctl(_sys.PR_SET_DUMPABLE, 0)
-    _sys.close_fds_except([0, 1, 2, result_w, pidfd])
+    _sys.close_fds_except([0, 1, 2, result_w, pidfd, procs_fd])
     _fault(spec, "exec_before_setns")
     os.setns(pidfd, ALL_NS)
     os.close(pidfd)
@@ -319,16 +324,28 @@ def do_exec(spec: dict, fds: list[int]) -> int:
     os.chdir(spec.get("cwd") or "/")
     env = spec.get("env") or {"PATH": DEFAULT_PATH, "HOME": "/root"}
     cmd = spec["cmd"]
+    go_r, go_w = os.pipe()
     f = os.fork()
     if f == 0:
         try:
             os.close(result_w)
+            os.close(go_w)
+            if _read_exact(go_r, 1) != b"G":  # wait until we are in the sandbox cgroup
+                os._exit(126)
+            os.close(go_r)
             os.setsid()
             _sys.prctl(_sys.PR_SET_PDEATHSIG, signal.SIGKILL)
             os.execvpe(cmd[0], cmd, env)
         except OSError as e:
             os.write(2, f"sandboxd: cannot exec {cmd[0]!r}: {e.strerror}\n".encode())
         os._exit(127)
+    os.close(go_r)
+    try:
+        os.write(procs_fd, str(f).encode())
+        os.write(go_w, b"G")
+    finally:
+        os.close(go_w)
+        os.close(procs_fd)
     emit("forked", pid=f)
     _, status = os.waitpid(f, 0)
     emit("exit", code=os.waitstatus_to_exitcode(status))

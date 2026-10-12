@@ -81,7 +81,7 @@ def test_destroy_during_running_exec(sb, mgr):
     mgr.destroy(sid)
     th.join(10)
     assert not th.is_alive()
-    assert res["r"]["exit_code"] is None and res["r"]["killed"]
+    assert res["r"]["exit_code"] == -9  # the command was killed by cgroup.kill; the helper (outside the cgroup) reported it
 
 
 def test_fork_failure_while_parent_frozen_thaws_parent(sb, mgr):
