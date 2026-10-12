@@ -110,6 +110,8 @@ class Daemon:
         self.proc = None
 
     def start(self) -> dict:
+        if os.path.exists(self.sock):
+            os.unlink(self.sock)  # a stale socket would let a client connect before the server listens
         self.proc = subprocess.Popen(
             [sys.executable, "-m", "control_plane.server", "--config", self.cfg_path],
             cwd=REPO, stdout=subprocess.PIPE, text=True,
