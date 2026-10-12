@@ -34,6 +34,16 @@ inside it, and `destroy` it with verified cleanup — including a test that
 crashes a sandbox mid-operation and confirms the control plane still
 cleans up mounts/namespaces/cgroups afterward (per CLAUDE.md rule 4).
 
+**Status (Phase 1):** implemented. Kickoff and risk list:
+[docs/phases/phase1.md](docs/phases/phase1.md). Tests:
+`sudo python3 scripts/record.py results/phase1-tests/<host> -- python3 -m pytest -v tests/test_lifecycle.py tests/test_failure_paths.py`.
+Raw output: [results/phase1-tests/wsl-dev-NOT-TARGET/](results/phase1-tests/wsl-dev-NOT-TARGET/).
+The first recorded run has one fixture error (a test-harness race on a
+stale socket, fixed in the next commit). It is kept, not deleted.
+All three idmapped-mount / procfs / Python-helper risks from the kickoff
+held up on the dev host; none of the fallbacks were needed there. This
+has **not** been re-checked on the target VM.
+
 ## Phase 2 — Fork + first benchmark (~1 week)
 
 Demonstrable: `fork(sandbox_id)` produces an independent sibling via cgroup freeze + btrfs snapshot + fresh namespaces/cgroup (network isolation still

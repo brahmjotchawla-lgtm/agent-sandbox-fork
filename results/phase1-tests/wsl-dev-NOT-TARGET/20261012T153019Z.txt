@@ -1,0 +1,56 @@
+command: python3 -m pytest -v tests/test_lifecycle.py tests/test_failure_paths.py
+cwd: /mnt/c/Users/brahm/repos/Sanbox CUH
+started_utc: 2026-10-12T15:30:19.934701+00:00
+finished_utc: 2026-10-12T15:30:30.252715+00:00
+kernel: 6.18.33.2-microsoft-standard-WSL2
+distro: Ubuntu 26.04 LTS
+cpu: AMD Ryzen 9 7940HX with Radeon Graphics x32
+mem_total: 7720672 kB
+virt: wsl
+wsl: True
+python: 3.14.4
+git_commit: 
+git_dirty: False
+------------------------------------------------------------------------
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.0.2, pluggy-1.6.0 -- /usr/bin/python3
+rootdir: /mnt/c/Users/brahm/repos/Sanbox CUH
+configfile: pytest.ini
+plugins: typeguard-4.4.4
+collecting ... collected 31 items
+
+tests/test_lifecycle.py::test_create_exec_destroy PASSED                 [  3%]
+tests/test_lifecycle.py::test_user_namespace_maps_root_to_private_host_range PASSED [  6%]
+tests/test_lifecycle.py::test_idmapped_rootfs_stores_unshifted_ownership PASSED [  9%]
+tests/test_lifecycle.py::test_no_host_supplementary_groups PASSED        [ 12%]
+tests/test_lifecycle.py::test_siblings_from_same_image_do_not_share_writes PASSED [ 16%]
+tests/test_lifecycle.py::test_mount_table_exposes_no_host_paths PASSED   [ 19%]
+tests/test_lifecycle.py::test_init_is_sealed_memfd PASSED                [ 22%]
+tests/test_lifecycle.py::test_init_survives_signals_from_inside PASSED   [ 25%]
+tests/test_lifecycle.py::test_network_namespace_has_only_loopback PASSED [ 29%]
+tests/test_lifecycle.py::test_exec_nonzero_and_missing_command PASSED    [ 32%]
+tests/test_lifecycle.py::test_exec_killed_by_signal_reports_negative_code PASSED [ 35%]
+tests/test_lifecycle.py::test_exec_stdin_env_cwd PASSED                  [ 38%]
+tests/test_lifecycle.py::test_exec_timeout PASSED                        [ 41%]
+tests/test_lifecycle.py::test_exec_background_process_does_not_hang_exec PASSED [ 45%]
+tests/test_lifecycle.py::test_exec_output_is_capped PASSED               [ 48%]
+tests/test_lifecycle.py::test_destroy_kills_background_processes PASSED  [ 51%]
+tests/test_lifecycle.py::test_pids_limit_contains_fork_bomb PASSED       [ 54%]
+tests/test_lifecycle.py::test_operations_on_unknown_sandbox_fail_cleanly PASSED [ 58%]
+tests/test_lifecycle.py::test_destroy_removes_nested_subvolumes PASSED   [ 61%]
+tests/test_failure_paths.py::test_launch_failure_at_each_stage_leaks_nothing[after_userns] PASSED [ 64%]
+tests/test_failure_paths.py::test_launch_failure_at_each_stage_leaks_nothing[after_cgroup] PASSED [ 67%]
+tests/test_failure_paths.py::test_launch_failure_at_each_stage_leaks_nothing[in_pid1] PASSED [ 70%]
+tests/test_failure_paths.py::test_launcher_hung_mid_setup_is_killed_and_cleaned PASSED [ 74%]
+tests/test_failure_paths.py::test_init_killed_from_host PASSED           [ 77%]
+tests/test_failure_paths.py::test_exec_helper_hung_before_setns PASSED   [ 80%]
+tests/test_failure_paths.py::test_destroy_during_running_exec PASSED     [ 83%]
+tests/test_failure_paths.py::test_fork_failure_while_parent_frozen_thaws_parent PASSED [ 87%]
+tests/test_failure_paths.py::test_control_plane_killed_mid_create_then_reconciled PASSED [ 90%]
+tests/test_failure_paths.py::test_control_plane_killed_mid_fork_parent_thawed PASSED [ 93%]
+tests/test_failure_paths.py::test_control_plane_restart_readopts_running_sandbox PASSED [ 96%]
+tests/test_failure_paths.py::test_remote_errors_are_reported_not_fatal PASSED [100%]
+
+============================== 31 passed in 9.83s ==============================
+------------------------------------------------------------------------
+exit_code: 0

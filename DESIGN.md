@@ -1,8 +1,9 @@
 # DESIGN.md
 
-Status: draft, pending author review. No code has been written yet — this
-document is the spec that implementation (see [PLAN.md](PLAN.md)) will be
-held to.
+Status: Phase 1 (single-sandbox lifecycle) is implemented. Later sections
+are still the spec that implementation (see [PLAN.md](PLAN.md)) is held to.
+Where implementation has resolved an open question, the text says so and
+links the code and test.
 
 ## 1. Problem and use case
 
@@ -151,10 +152,20 @@ surface this budget can't absorb for no semantic gain over btrfs here.
 - *Snapshots are crash-consistent, not application-consistent.* Freezing
   the cgroup narrows the window but does not make a database-in-progress
   consistent.
-- *UID mapping.* Files in the base subvolume must be owned by the mapped
-  host range, or the rootfs mounted with an idmapped mount (kernel
-  support for btrfs to be verified). Chowning the base once at image
-  build time is the fallback.
+- *UID mapping.* Implemented in Phase 1 with **idmapped mounts**. The
+  base image is stored on disk with its original ownership (uid 0..65535).
+  Each sandbox's rootfs is an `open_tree` + `mount_setattr(MOUNT_ATTR_IDMAP)`
+  clone of its subvolume, keyed to that sandbox's user namespace. So every
+  sandbox gets its **own** 65536-wide host uid range, and fork needs no
+  `chown`
+  ([control_plane/zygote.py](control_plane/zygote.py), tested by
+  `test_user_namespace_maps_root_to_private_host_range` and
+  `test_idmapped_rootfs_stores_unshifted_ownership` in
+  [tests/test_lifecycle.py](tests/test_lifecycle.py)). Consequence: files the
+  sandbox makes owned by its root are stored on disk as real uid 0. The btrfs
+  volume is therefore mounted `nosuid,nodev` on the host and lives under a
+  0700 root-only directory, so a setuid-root file written by a sandbox can
+  never be executed from the host side.
 - *Disk space is not bounded by cgroup io limits.* Per-sandbox disk
   quotas would need btrfs qgroups, whose overhead is unmeasured; until
   then disk exhaustion is a documented gap (§5.3).
@@ -207,7 +218,7 @@ that attacking its own sandbox is a viable strategy. The design assumes:
   unprivileged UID on the host. This means that even in the event of a
   successful namespace escape, the escaping process lands on the host as
   an unprivileged user, not as root — an extra layer behind the namespace
-  boundary itself, not a replacement for it. Known complexity: the rootfs subvolume's file ownership must fall in the mapped host range (or be idmapped), and the sandbox process must switch to the mapped uid/gid after the map is written — Phase 0 showed a freshly created user namespace's creator otherwise reads as the overflow uid 65534. This is a concrete Phase 1 risk (see PLAN.md).
+  boundary itself, not a replacement for it. Phase 1 resolution: each sandbox gets a private host range (idmapped rootfs, §3). The process calls `setgroups([])` and `setresuid/setresgid(0)` inside the namespace after the map is written. Without that, Phase 0 showed the creator reads as overflow uid 65534. The `setgroups([])` matters: without it, host root's supplementary gid 0 would ride along on every sandbox process (`test_no_host_supplementary_groups`).
 - **cgroup v2** — CPU, memory, PID count, and disk I/O limits per sandbox,
   so a single sandbox (or a runaway fork fan-out) cannot starve the host
   or sibling sandboxes of resources. This is the mechanism that answers
