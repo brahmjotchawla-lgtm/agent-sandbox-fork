@@ -73,6 +73,8 @@ def main():
         sys.exit(__doc__)
     i = sys.argv.index("--")
     out_dir, cmd = sys.argv[1], sys.argv[i + 1 :]
+    # Provenance first: once the output file exists it would itself make the tree look dirty.
+    prov = provenance()
     os.makedirs(out_dir, exist_ok=True)
     started = dt.datetime.now(dt.timezone.utc)
     p = subprocess.run(cmd, cwd=REPO, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
@@ -80,7 +82,7 @@ def main():
     path = os.path.join(out_dir, started.strftime("%Y%m%dT%H%M%SZ") + ".txt")
     with open(path, "w") as f:
         f.write(f"command: {' '.join(cmd)}\ncwd: {REPO}\nstarted_utc: {started.isoformat()}\nfinished_utc: {finished.isoformat()}\n")
-        f.write("\n".join(provenance()) + "\n")
+        f.write("\n".join(prov) + "\n")
         f.write("-" * 72 + "\n")
         f.write(p.stdout)
         f.write("-" * 72 + f"\nexit_code: {p.returncode}\n")
