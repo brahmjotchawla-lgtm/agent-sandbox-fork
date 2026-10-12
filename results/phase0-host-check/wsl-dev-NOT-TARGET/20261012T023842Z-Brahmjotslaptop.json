@@ -1,0 +1,274 @@
+{
+  "schema_version": 1,
+  "started_utc": "2026-10-12T02:38:42.419742+00:00",
+  "finished_utc": "2026-10-12T02:38:46.181294+00:00",
+  "hostname": "Brahmjotslaptop",
+  "command": "/usr/bin/python3 scripts/host_check.py --out-dir results/phase0-host-check/wsl-dev-NOT-TARGET",
+  "script_sha256": "9c3832d5d46418184d9092e9460e5f958b524591c7443ca537e2a1c725f2f410",
+  "git": {
+    "commit": "66418e4367e45493a9e94adeb385217c5e7345e7",
+    "dirty": false
+  },
+  "is_wsl": true,
+  "required_failed": [],
+  "checks": [
+    {
+      "name": "host_info",
+      "required": false,
+      "design_ref": "BENCHMARKS \u00a73.6",
+      "status": "info",
+      "detail": "Ubuntu 26.04 LTS, kernel 6.18.33.2-microsoft-standard-WSL2, virt=wsl, wsl=True",
+      "data": {
+        "kernel": "6.18.33.2-microsoft-standard-WSL2",
+        "uname": "Linux Brahmjotslaptop 6.18.33.2-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Thu Jun 18 21:54:43 UTC 2026 x86_64 ",
+        "distro": "Ubuntu 26.04 LTS",
+        "cpu_model": "AMD Ryzen 9 7940HX with Radeon Graphics",
+        "cpu_count": 32,
+        "mem_total_kb": 7720680,
+        "virt": "wsl",
+        "dmi_vendor": "n/a",
+        "dmi_product": "n/a",
+        "is_wsl": true,
+        "lsblk": "NAME ROTA TYPE   SIZE MODEL\nsda     1 disk 356.9M Virtual Disk\nsdb     1 disk 159.4M Virtual Disk\nsdc     1 disk     2G Virtual Disk\nsdd     1 disk     1T Virtual Disk",
+        "workdir": "/var/tmp",
+        "workdir_fs": "ext4 /dev/sdd",
+        "python": "3.14.4"
+      }
+    },
+    {
+      "name": "overlay_registered",
+      "required": true,
+      "design_ref": "\u00a73",
+      "status": "pass",
+      "detail": "overlay listed in /proc/filesystems",
+      "data": {}
+    },
+    {
+      "name": "overlay_basic",
+      "required": true,
+      "design_ref": "\u00a73",
+      "status": "pass",
+      "detail": "mount, read-through, copy-up, and lower-immutability all held",
+      "data": {}
+    },
+    {
+      "name": "overlay_fork_stack",
+      "required": true,
+      "design_ref": "\u00a73 fork mechanics",
+      "status": "pass",
+      "detail": "child sees pre-fork state; child writes stay in child upper, invisible to parent",
+      "data": {}
+    },
+    {
+      "name": "overlay_parent_write_after_fork",
+      "required": false,
+      "design_ref": "\u00a73 fork mechanics",
+      "status": "info",
+      "detail": "parent writes AFTER fork were visible in child (isolation broken); kernel docs call this undefined behavior, so this observation is not a guarantee",
+      "data": {
+        "child_reads_parent_txt_as": "parent-AFTER-fork",
+        "child_sees_late_txt": true,
+        "child_listing": [
+          "base.txt",
+          "late.txt",
+          "parent.txt"
+        ]
+      }
+    },
+    {
+      "name": "overlay_max_layers",
+      "required": false,
+      "design_ref": "\u00a73 stacking limit",
+      "status": "info",
+      "detail": "max stacked lowerdirs via legacy mount(2): 500 with short relative paths, 121 with absolute paths under /var/tmp",
+      "data": {
+        "relative_paths": {
+          "max_layers": 500,
+          "mount_data_len_at_max": 2419,
+          "next_layer_failure": "EINVAL: Invalid argument",
+          "mount_data_len_at_failure": 2424,
+          "ok_at_500": true,
+          "ok_at_501": false,
+          "layer_path_len_example": 4,
+          "search_ceiling": 1100
+        },
+        "absolute_paths": {
+          "max_layers": 121,
+          "mount_data_len_at_max": 4091,
+          "next_layer_failure": "EINVAL: Invalid argument",
+          "mount_data_len_at_failure": 4125,
+          "ok_at_500": false,
+          "ok_at_501": false,
+          "layer_path_len_example": 33,
+          "search_ceiling": 1100
+        }
+      }
+    },
+    {
+      "name": "namespaces",
+      "required": true,
+      "design_ref": "\u00a75.2",
+      "status": "pass",
+      "detail": "mnt/uts/ipc/net/pid namespaces all distinct from host; child is PID 1",
+      "data": {}
+    },
+    {
+      "name": "userns_mapping",
+      "required": true,
+      "design_ref": "\u00a75.2",
+      "status": "pass",
+      "detail": "ns-root (uid 0) mapped to host uid 100000; host-root-owned files show as uid 65534 inside",
+      "data": {
+        "max_user_namespaces": "30116",
+        "apparmor_restrict_unprivileged_userns": "n/a",
+        "probe": {
+          "uid": 0,
+          "host_root_file_appears_as_uid": 65534
+        }
+      }
+    },
+    {
+      "name": "overlay_in_userns",
+      "required": false,
+      "design_ref": "\u00a75.2",
+      "status": "info",
+      "detail": "overlay mounted by userns-root succeeded (plain options)",
+      "data": {
+        "probe": {
+          "uid": 0,
+          "host_root_file_appears_as_uid": 65534,
+          "overlay": {
+            "plain": "ok (read lower='lower', create ok)"
+          }
+        }
+      }
+    },
+    {
+      "name": "cgroup_v2",
+      "required": true,
+      "design_ref": "\u00a75.2",
+      "status": "pass",
+      "detail": "created nested cgroups, set memory/pids/cpu limits, placed a process in the leaf",
+      "data": {
+        "available": [
+          "cpuset",
+          "cpu",
+          "io",
+          "memory",
+          "hugetlb",
+          "pids",
+          "rdma"
+        ],
+        "delegated_at_root": [
+          "cpu",
+          "io",
+          "memory",
+          "pids"
+        ],
+        "knobs": {
+          "memory.max": "268435456",
+          "pids.max": "64",
+          "cpu.max": "50000 100000"
+        },
+        "has_cgroup_freeze": true,
+        "has_cgroup_kill": true
+      }
+    },
+    {
+      "name": "veth_netns",
+      "required": true,
+      "design_ref": "\u00a75.4",
+      "status": "pass",
+      "detail": "created netns + veth pair, addressed and brought up both ends; ping across the pair succeeded",
+      "data": {}
+    },
+    {
+      "name": "nft",
+      "required": true,
+      "design_ref": "\u00a75.4",
+      "status": "pass",
+      "detail": "nftables v1.1.6 (Commodore Bullmoose #7): created and listed a table inside a fresh netns",
+      "data": {
+        "tables": "table inet chk"
+      }
+    },
+    {
+      "name": "tools",
+      "required": false,
+      "design_ref": "\u00a74, BENCHMARKS \u00a72",
+      "status": "info",
+      "detail": "present: btrfs, docker, gcc, ip, losetup, mkfs.btrfs, nft, nsenter, ping, python3, unshare",
+      "data": {
+        "python3": {
+          "path": "/usr/bin/python3"
+        },
+        "gcc": {
+          "path": "/usr/bin/gcc",
+          "version": [
+            "gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0"
+          ]
+        },
+        "rustc": {
+          "path": null
+        },
+        "cargo": {
+          "path": null
+        },
+        "ip": {
+          "path": "/usr/sbin/ip"
+        },
+        "nft": {
+          "path": "/usr/sbin/nft",
+          "version": [
+            "nftables v1.1.6 (Commodore Bullmoose #7)"
+          ]
+        },
+        "iptables": {
+          "path": null
+        },
+        "unshare": {
+          "path": "/usr/bin/unshare"
+        },
+        "nsenter": {
+          "path": "/usr/bin/nsenter"
+        },
+        "ping": {
+          "path": "/usr/bin/ping"
+        },
+        "criu": {
+          "path": null
+        },
+        "docker": {
+          "path": "/mnt/c/Users/brahm/AppData/Local/Programs/DockerDesktop/resources/bin/docker",
+          "version": [
+            "The command 'docker' could not be found in this WSL 2 distro."
+          ],
+          "info": ""
+        },
+        "btrfs": {
+          "path": "/usr/bin/btrfs",
+          "version": [
+            "btrfs-progs v6.17.1"
+          ]
+        },
+        "mkfs.btrfs": {
+          "path": "/usr/sbin/mkfs.btrfs"
+        },
+        "zfs": {
+          "path": null
+        },
+        "losetup": {
+          "path": "/usr/sbin/losetup"
+        }
+      }
+    },
+    {
+      "name": "btrfs_loopback",
+      "required": true,
+      "design_ref": "\u00a73",
+      "status": "pass",
+      "detail": "btrfs snapshot stayed frozen while the source subvolume kept being written",
+      "data": {}
+    }
+  ]
+}
