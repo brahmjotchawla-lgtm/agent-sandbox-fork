@@ -140,6 +140,45 @@ def seccomp_set_filter(prog_ptr, flags=0):
     return _check(_libc.syscall(NR_SECCOMP, ctypes.c_uint(1), ctypes.c_uint(flags), prog_ptr), "seccomp(SET_MODE_FILTER)")
 
 
+NR_CLONE3 = 435  # unified table
+CLONE_INTO_CGROUP = 0x200000000
+_pylibc = ctypes.PyDLL(None, use_errno=True)  # PyDLL: keeps the GIL held across the call
+_pylibc.syscall.restype = ctypes.c_long
+
+
+class _CloneArgs(ctypes.Structure):
+    _fields_ = [(n, ctypes.c_uint64) for n in (
+        "flags", "pidfd", "child_tid", "parent_tid", "exit_signal", "stack", "stack_size",
+        "tls", "set_tid", "set_tid_size", "cgroup")]
+
+
+def fork_into_cgroup(cgroup_dirfd: int) -> int:
+    """fork(), but the child is born inside the cgroup `cgroup_dirfd` (clone3 + CLONE_INTO_CGROUP).
+
+    Why: moving an existing process by writing cgroup.procs takes the
+    cgroup_threadgroup_rwsem for writing, which waits for an RCU grace period.
+    On the dev host that showed a tail of tens of ms per launch.
+    CLONE_INTO_CGROUP places the child at creation and skips the migration.
+
+    It brackets the raw syscall with PyOS_BeforeFork / PyOS_AfterFork_*
+    exactly the way os.fork() does. The caller must be single-threaded (the
+    zygote and its children are).
+    """
+    import signal as _signal
+
+    args = _CloneArgs(flags=CLONE_INTO_CGROUP, exit_signal=_signal.SIGCHLD, cgroup=cgroup_dirfd)
+    ctypes.pythonapi.PyOS_BeforeFork()
+    pid = _pylibc.syscall(NR_CLONE3, ctypes.byref(args), ctypes.c_size_t(ctypes.sizeof(args)))
+    if pid == 0:
+        ctypes.pythonapi.PyOS_AfterFork_Child()
+        return 0
+    err = ctypes.get_errno()
+    ctypes.pythonapi.PyOS_AfterFork_Parent()
+    if pid < 0:
+        raise OSError(err, f"clone3(CLONE_INTO_CGROUP): {os.strerror(err)}")
+    return pid
+
+
 def close_fds_except(keep):
     """Close every fd except those in `keep` (used before entering a sandbox)."""
     # os.closerange uses close_range(2) on Linux, so a huge upper bound is cheap.

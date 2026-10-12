@@ -81,12 +81,25 @@ def test_fork_under_memory_pressure(sb, mgr):
     ev = mgr.cg.stat(p)["memory.events"]
     c = sb.fork(p)
     assert sb.sh(c, "echo ok")["exit_code"] == 0
-    # exec into the still-saturated parent. The exec helper is not charged to
-    # the sandbox, so it survives and always reports a status. The command
-    # itself can legitimately be OOM-killed (-9) while the hog churns, so we
-    # require at least one success, not all.
+    # exec into the parent while the hog is still churning. The exec helper is
+    # not charged to the sandbox, so it always survives to report a status.
+    # The command itself can legitimately be OOM-killed (-9): until execve it
+    # is a copy of a Python process (~10 MB RSS), the largest thing in a
+    # cgroup with a few MB of headroom. That is the cgroup working as intended.
     codes = [sb.sh(p, "echo ok")["exit_code"] for _ in range(5)]
-    assert None not in codes and 0 in codes, codes
+    assert None not in codes, codes
+    # Stop the churn from the host side. The parent stays near memory.max
+    # (40 MB of tmpfs). exec must now succeed every time.
+    for pid in mgr.cg.procs(p):
+        try:
+            cmd = open(f"/proc/{pid}/cmdline", "rb").read()
+        except OSError:
+            continue
+        if b"tail" in cmd:
+            os.kill(pid, 9)
+    time.sleep(0.2)
+    codes = [sb.sh(p, "echo ok")["exit_code"] for _ in range(5)]
+    assert codes == [0] * 5, codes
     oom_kills = int(dict(l.split() for l in mgr.cg.stat(p)["memory.events"].splitlines())["oom_kill"])
     assert oom_kills > 0, f"memory pressure was not actually applied: {ev}"
     # The child got its own fresh cgroup; the parent's pressure is not inherited.

@@ -103,12 +103,10 @@ def do_launch(spec: dict, fds: list[int], init_fd: int) -> int:
     t: dict[str, int] = {"launcher_start": _now()}
     emit("started", pid=os.getpid())
     os.setsid()
-    # The launcher joins the sandbox cgroup itself, first thing. Then a
-    # cgroup.kill during cleanup also catches a launcher stuck mid-setup, even
-    # if the control plane crashed before it learned the launcher's PID.
-    # C1 and C2 inherit the cgroup through fork.
-    with open(os.path.join(spec["cgroup"], "cgroup.procs"), "w") as fh:
-        fh.write(str(os.getpid()))
+    # The zygote created this launcher directly inside the sandbox cgroup
+    # (clone3 + CLONE_INTO_CGROUP). So a cgroup.kill during cleanup also
+    # catches a launcher stuck mid-setup, even if the control plane crashed
+    # before it learned the launcher's PID. C1 and C2 inherit the cgroup.
     _sys.close_fds_except([result_w, init_fd])
 
     # A private, throwaway mount namespace for the launcher. Nothing mounted
@@ -119,6 +117,7 @@ def do_launch(spec: dict, fds: list[int], init_fd: int) -> int:
     _sys.mount("tmpfs", stage, "tmpfs", _sys.MS_NOSUID | _sys.MS_NODEV | _sys.MS_NOEXEC, "mode=711,size=64k")
     root = os.path.join(stage, "root")
     os.mkdir(root, 0o700)
+    t["launcher_mntns_ready"] = _now()
 
     to_c1_r, to_c1_w = os.pipe()
     from_c1_r, from_c1_w = os.pipe()
@@ -193,12 +192,14 @@ def do_launch(spec: dict, fds: list[int], init_fd: int) -> int:
 def _child_c1(spec, root, init_fd, to_c1_r, from_c1_w, exec_w, result_w) -> None:
     try:
         os.close(result_w)
+        t0 = _now()
         os.unshare(_sys.CLONE_NEWUSER)
+        t1 = _now()
         os.write(from_c1_w, b"U")
         if _read_exact(to_c1_r, 1) != b"M":
             os._exit(1)
         os.close(to_c1_r)
-        t = {"c1_maps_seen": _now()}
+        t = {"c1_started": t0, "c1_userns_unshared": t1, "c1_maps_seen": _now()}
         # Enter the rootfs while we are still host root: the staging path is
         # under a 0700 root-owned directory that the sandbox's host uid range
         # cannot traverse, by design. Everything after this is cwd-relative.
@@ -293,59 +294,60 @@ def _setup_mounts(devs: dict[str, int]) -> None:
 
 
 def do_exec(spec: dict, fds: list[int]) -> int:
+    """Run one command inside a sandbox.
+
+    Ordering, and why:
+      1. Still host root: open the sandbox cgroup dir and go non-dumpable.
+         Sandboxed root must never be able to ptrace this helper or read its
+         memory while it is inside sandbox namespaces holding host-side state.
+      2. setns() into the sandbox's mnt/pid/net/uts/ipc namespaces. This is
+         allowed as host root, which holds every capability over namespaces
+         owned by the sandbox's user namespace. The helper itself stays in
+         the host PID namespace, so it never appears in the sandbox's /proc.
+      3. clone3(CLONE_INTO_CGROUP): the command process is born inside the
+         sandbox cgroup and PID namespace. Nothing is migrated, and the
+         helper itself is never charged to the sandbox. A sandbox sitting at
+         memory.max would otherwise OOM-kill it.
+      4. Only the command process enters the user and cgroup namespaces,
+         drops to sandbox uid/gid 0, and execs. Until then it is host root
+         inside the sandbox's PID namespace, but it is non-dumpable and
+         carries host credentials. Sandboxed root can neither signal nor
+         ptrace it, and its /proc/<pid>/{root,cwd,fd,mem} are not accessible.
+    """
     result_w, pidfd, stdin_fd, stdout_fd, stderr_fd = fds
     emit = _Emitter(result_w)
     emit("started", pid=os.getpid())
     os.dup2(stdin_fd, 0)
     os.dup2(stdout_fd, 1)
     os.dup2(stderr_fd, 2)
-    # The helper itself stays OUT of the sandbox cgroup. If it joined, a sandbox
-    # sitting at memory.max would get it OOM-killed (it is the largest process
-    # there) and exec would fail exactly when someone needs to look inside.
-    # It opens the sandbox's cgroup.procs now, as host root. Since Linux 5.16
-    # cgroup migration permission is checked against the credentials and
-    # cgroup namespace of the *opener*, so this fd still works after setns()
-    # has turned us into sandbox root. Only the forked command gets moved in.
-    procs_fd = os.open(os.path.join(spec["cgroup"], "cgroup.procs"), os.O_WRONLY | os.O_CLOEXEC)
-    # Non-dumpable: sandboxed root must not be able to ptrace or read /proc/<pid>/mem
-    # of this process during the window where it is inside the sandbox's
-    # namespaces but still a host-side helper. (It also is not in the sandbox's
-    # PID namespace, so it is not visible there at all.)
+    cg_fd = os.open(spec["cgroup"], os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
     _sys.prctl(_sys.PR_SET_DUMPABLE, 0)
-    _sys.close_fds_except([0, 1, 2, result_w, pidfd, procs_fd])
+    _sys.close_fds_except([0, 1, 2, result_w, pidfd, cg_fd])
     _fault(spec, "exec_before_setns")
-    os.setns(pidfd, ALL_NS)
-    os.close(pidfd)
-    os.setgroups([])
-    uid, gid = spec.get("uid", 0), spec.get("gid", 0)
-    os.setresgid(gid, gid, gid)
-    os.setresuid(uid, uid, uid)
-    _sys.prctl(_sys.PR_SET_DUMPABLE, 0)  # changing uid resets dumpable; set it again
-    os.chdir(spec.get("cwd") or "/")
+    os.setns(pidfd, _sys.CLONE_NEWNS | _sys.CLONE_NEWPID | _sys.CLONE_NEWNET | _sys.CLONE_NEWUTS | _sys.CLONE_NEWIPC)
     env = spec.get("env") or {"PATH": DEFAULT_PATH, "HOME": "/root"}
     cmd = spec["cmd"]
-    go_r, go_w = os.pipe()
-    f = os.fork()
+    uid, gid = spec.get("uid", 0), spec.get("gid", 0)
+    f = _sys.fork_into_cgroup(cg_fd)
     if f == 0:
         try:
             os.close(result_w)
-            os.close(go_w)
-            if _read_exact(go_r, 1) != b"G":  # wait until we are in the sandbox cgroup
-                os._exit(126)
-            os.close(go_r)
+            os.close(cg_fd)
+            os.setns(pidfd, _sys.CLONE_NEWUSER | _sys.CLONE_NEWCGROUP)
+            os.close(pidfd)
+            os.setgroups([])
+            os.setresgid(gid, gid, gid)
+            os.setresuid(uid, uid, uid)
+            _sys.prctl(_sys.PR_SET_DUMPABLE, 0)  # changing uid resets dumpable; keep it off until execve
+            os.chdir(spec.get("cwd") or "/")
             os.setsid()
-            _sys.prctl(_sys.PR_SET_PDEATHSIG, signal.SIGKILL)
+            _sys.prctl(_sys.PR_SET_PDEATHSIG, signal.SIGKILL)  # after the uid change, which clears it
             os.execvpe(cmd[0], cmd, env)
         except OSError as e:
             os.write(2, f"sandboxd: cannot exec {cmd[0]!r}: {e.strerror}\n".encode())
         os._exit(127)
-    os.close(go_r)
-    try:
-        os.write(procs_fd, str(f).encode())
-        os.write(go_w, b"G")
-    finally:
-        os.close(go_w)
-        os.close(procs_fd)
+    os.close(pidfd)
+    os.close(cg_fd)
     emit("forked", pid=f)
     _, status = os.waitpid(f, 0)
     emit("exit", code=os.waitstatus_to_exitcode(status))
@@ -396,7 +398,25 @@ def main() -> None:
         if not msg:
             break
         req = json.loads(msg)
-        pid = os.fork()
+        try:
+            if req["op"] == "launch":
+                cg = os.open(req["spec"]["cgroup"], os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+                pid = -1
+                try:
+                    pid = _sys.fork_into_cgroup(cg)
+                finally:
+                    if pid != 0:
+                        os.close(cg)
+            else:
+                pid = os.fork()
+        except OSError as e:
+            try:
+                _Emitter(fds[0])("error", msg=f"zygote: {type(e).__name__}: {e}")
+            except OSError:
+                pass
+            for fd in fds:
+                os.close(fd)
+            continue
         if pid == 0:
             signal.signal(signal.SIGCHLD, signal.SIG_DFL)
             sock.close()

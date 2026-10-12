@@ -403,7 +403,10 @@ class SandboxManager:
         timings["launch_ms"] = _ms(t_launch, t_ready)
         timings["launch_breakdown_ms"] = {
             "zygote_fork_to_launcher": _ms(t_launch, lt["launcher_start"]),
-            "launcher_setup_to_userns": _ms(lt["launcher_start"], lt["userns_created"]),
+            "launcher_private_mntns": _ms(lt["launcher_start"], lt["launcher_mntns_ready"]),
+            "fork_c1": _ms(lt["userns_fork"], lt["c1_started"]),
+            "unshare_userns": _ms(lt["c1_started"], lt["c1_userns_unshared"]),
+            "userns_handoff": _ms(lt["c1_userns_unshared"], lt["userns_created"]),
             "idmap_write": _ms(lt["userns_created"], lt["idmap_written"]),
             "idmapped_rootfs_mount": _ms(lt["idmap_written"], lt["rootfs_idmapped"]),
             "namespaces_create": _ms(lt["c1_maps_seen"], lt["namespaces_created"]),
