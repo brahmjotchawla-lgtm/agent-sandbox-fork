@@ -6,7 +6,8 @@ N parallel copies, with containment enforced from outside the sandbox.
 **Status: Phases 1–3 of [PLAN.md](PLAN.md) are implemented** (lifecycle,
 environment fork, containment controls). Everything has run only on a WSL2
 dev host, **not** the target VM. Containment has been checked for
-existence, not attacked: Phase 4 has not started. So this README makes no
+existence, not attacked: the Phase 4 suite is written but has not run yet
+(DESIGN.md §5.6). So this README makes no
 security claim. The first fork-vs-Docker measurements, including the
 results that go against the claim, are in [BENCHMARKS.md §4a](BENCHMARKS.md).
 

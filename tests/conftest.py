@@ -10,8 +10,10 @@ from __future__ import annotations
 import json
 import os
 import platform
+import socket
 import subprocess
 import sys
+import threading
 import time
 
 import pytest
@@ -142,3 +144,65 @@ class Daemon:
     def manager(self) -> SandboxManager:
         """An in-process manager on the same state, for audit() after the daemon is gone."""
         return SandboxManager(self.cfg)
+
+
+# ------------------------------------------- network + seccomp manager (Phase 3/4)
+
+WORKLOAD_TAR = "/var/tmp/sandboxd-workload.tar"
+PY = "/usr/local/bin/python3"
+NETNS = "sbxeg-test"
+
+
+@pytest.fixture(scope="session")
+def echo_port():
+    srv = socket.socket()
+    srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    srv.bind(("127.0.0.1", 0))
+    srv.listen(64)
+
+    def serve():
+        while True:
+            try:
+                c, _ = srv.accept()
+            except OSError:
+                return
+            threading.Thread(target=lambda c=c: (c.sendall(c.recv(1024)), c.close()), daemon=True).start()
+
+    threading.Thread(target=serve, daemon=True).start()
+    yield srv.getsockname()[1]
+    srv.close()
+
+
+@pytest.fixture(scope="session")
+def nmgr(echo_port):
+    if not os.path.exists(WORKLOAD_TAR):
+        pytest.skip(f"{WORKLOAD_TAR} missing: run bench/build_workload.sh first")
+    cfg = make_config("net", network=True, seccomp=True, egress_netns=NETNS, egress_subnet="10.201.0.0/16",
+                      egress_allowlist=[f"127.0.0.1:{echo_port}", f"localhost:{echo_port}"])
+    m = SandboxManager(cfg)
+    m.start()
+    if "workload" not in m.list_images():
+        m.import_image("workload", WORKLOAD_TAR)
+    yield m
+    for sid in m.list_sandboxes():
+        m.destroy(sid)
+    m.close()
+
+
+@pytest.fixture
+def nsb(nmgr):
+    t = Tracker(nmgr)
+    yield t
+    t.finish()
+
+
+def create(t: Tracker, **kw) -> str:
+    return t._track(t.m.create_environment("workload", **kw)["id"])
+
+
+def pyjson(t: Tracker, sid: str, code: str, timeout=30):
+    r = t.m.exec(sid, [PY, "-c", code], timeout=timeout)
+    assert r["exit_code"] == 0, (r["exit_code"], r["stdout"], r["stderr"])
+    return json.loads(r["stdout"].decode().strip().splitlines()[-1])
+
+

@@ -1,6 +1,6 @@
 # DESIGN.md
 
-Status: Phases 1–3 are implemented (lifecycle, fork, containment controls). Phase 4 (adversarial testing) has not started. Later sections
+Status: Phases 1–3 are implemented (lifecycle, fork, containment controls). The Phase 4 adversarial suite is written (§5.6) but has not run yet. Later sections
 are still the spec that implementation (see [PLAN.md](PLAN.md)) is held to.
 Where implementation has resolved an open question, the text says so and
 links the code and test.
@@ -301,6 +301,48 @@ Mitigations are process hygiene, not architectural elimination of the
 risk: keep its code surface small, never deserialize untrusted input
 originating from inside a sandbox without validation, and don't expose
 more API surface to sandboxes than `exec`/basic I/O requires.
+
+### 5.6 Adversarial coverage (Phase 4)
+
+Suite: [tests/test_adversarial.py](tests/test_adversarial.py). The attacker
+is root inside the sandbox, under the production configuration
+(network + seccomp). Each row is one attack, and its test asserts the
+secure outcome. **Results column: pending.** The suite has not run on any
+host yet. It needs btrfs and cgroup v2, which the Claude cloud container it
+was written in does not have. Raw output will go under
+`results/phase4-adversarial/`. Any failure becomes a known limitation here
+and in §5.3 and is marked `xfail(strict=True)`; it is never deleted.
+
+| Attack | Test | Result |
+|---|---|---|
+| See host processes | `test_host_processes_invisible` | pending |
+| `kill -9 -1` from inside | `test_kill_everything_hits_only_the_sandbox` | pending |
+| Double-chroot escape, `/proc/1/root` walk | `test_double_chroot_escape_stays_inside` | pending |
+| Block device nodes, `mknod` | `test_no_dangerous_device_nodes_and_no_mknod` | pending |
+| Host kernel knobs (`core_pattern`, `uevent_helper`, `modprobe`, sysrq) | `test_host_kernel_knobs_not_writable` | pending |
+| `open_by_handle_at` ("shocker"), module load, `reboot`, `bpf`, `perf_event_open`, `userfaultfd`, new mount API | `test_dangerous_syscalls_refused` | pending |
+| btrfs ioctls (subvolume create/snapshot/destroy, `INO_LOOKUP`, `TREE_SEARCH`) | `test_btrfs_ioctls_refused` | pending |
+| Reach own cgroup controls (mount cgroup2, host cgroup path) | `test_cannot_reach_own_cgroup_controls` | pending |
+| Overwrite PID 1's binary via `/proc/1/exe` (CVE-2019-5736 class) | `test_pid1_binary_cannot_be_overwritten` | pending |
+| Reach the control socket or state dirs | `test_control_socket_and_state_not_reachable` | pending |
+| Host abstract unix socket (CVE-2020-15257 class) | `test_host_abstract_unix_socket_unreachable` | pending |
+| Host fds/env leaking into exec | `test_exec_inherits_no_host_fds_or_env` | pending |
+| Outlive an exec timeout via `setsid()` + double fork | `test_exec_timeout_kills_detached_descendants` | pending (expected to fail: exec timeout kills only the child's process group) |
+| Fork bomb | `test_fork_bomb_contained_and_destroyable` | pending |
+| Symlinks to host paths during fork/destroy | `test_symlinks_to_host_survive_fork_and_destroy` | pending |
+| Hostile filenames/permissions breaking destroy | `test_hostile_tree_does_not_break_destroy` | pending |
+| SysV IPC with a sibling | `test_sibling_ipc_isolated` | pending |
+| Re-route and flush own nft to reach the internet | `test_root_rerouting_and_flushing_does_not_open_egress` | pending |
+| Join the egress or host netns | `test_cannot_join_egress_or_host_netns` | pending |
+| Spoof a sibling's IP to the proxy | `test_spoofing_a_sibling_address_is_dropped` | pending |
+| Proxy loop to itself, loopback, cloud metadata | `test_proxy_will_not_connect_to_itself_or_control_plane` | pending |
+| Proxy non-CONNECT surface | `test_proxy_has_no_other_surface` | pending |
+| Crash the proxy with malformed input | `test_proxy_survives_malformed_input` | pending |
+| Starve siblings of the proxy (connection hog) | `test_one_sandbox_cannot_starve_siblings_of_the_proxy` | pending |
+| Compromised proxy pivoting to host services | `test_compromised_proxy_cannot_reach_host_services` | **known limitation** (§5.3), `xfail(strict=True)` |
+| Syscalls via non-native ABIs (i386, x32) | none | not tested by this suite; handled in `seccomp.py` |
+| Disk exhaustion | none | known limitation (§5.3); not run |
+| Kernel 0-days, side channels | none | out of scope (§5.3) |
 
 ## 6. API surface
 
